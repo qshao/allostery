@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "allostery"
-version = "0.0.0"
+version = "0.1.0"
 description = "Allostery research package"
 requires-python = ">=3.11"
 dependencies = [
@@ -15,6 +15,11 @@ dependencies = [
 
 [project.scripts]
 allostery = "allostery.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/qshao/allostery"
+Repository = "https://github.com/qshao/allostery"
+Changelog = "https://github.com/qshao/allostery/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
 dev = [
