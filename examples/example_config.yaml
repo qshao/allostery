@@ -1,0 +1,25 @@
+mode: run
+
+data:
+  pdb_path: ../tests/fixtures/tiny_trajectory.pdb
+  window_size: 1
+  horizon_size: 1
+  stride: 1
+
+model:
+  hidden_dim: 8
+  residue_layers: 3
+  pair_layers: 4
+  dropout: 0.15
+
+training:
+  epochs: 1
+  learning_rate: 0.001
+  consistency_weight: 0.25
+
+scoring:
+  top_k: 5
+
+output:
+  model_path: ../outputs/example_model.pt
+  score_csv_path: ../outputs/example_scores.csv
