@@ -307,3 +307,50 @@ def test_load_config_resolves_relative_paths_from_config_location(tmp_path: Path
     assert config.data.pdb_path == pdb_path.resolve()
     assert config.output.model_path == (output_dir / "model.pt").resolve()
     assert config.output.score_csv_path == (output_dir / "scores.csv").resolve()
+
+
+def test_load_config_parses_cri_model_fields(tmp_path: Path) -> None:
+    config_path = tmp_path / "cri.yaml"
+    _write_config(
+        config_path,
+        [
+            "mode: run",
+            "data:",
+            f"  pdb_path: {FIXTURE_PDB}",
+            "  window_size: 3",
+            "  horizon_size: 1",
+            "  stride: 1",
+            "  time_step: 1.0",
+            "  distance_cutoff: 20.0",
+            "  max_neighbors: 2",
+            "model:",
+            "  family: cri",
+            "  hidden_dim: 8",
+            "  residue_layers: 1",
+            "  pair_layers: 2",
+            "  dropout: 0.0",
+            "  edge_types: 2",
+            "training:",
+            "  epochs: 1",
+            "  learning_rate: 0.001",
+            "  consistency_weight: 0.0",
+            "  entropy_weight: 0.0",
+            "  no_edge_weight: 0.0",
+            "scoring:",
+            "  top_k: 5",
+            "output:",
+            "  model_path: outputs/cri.pt",
+            "  score_csv_path: outputs/cri_scores.csv",
+        ],
+    )
+
+    config = load_config(config_path)
+
+    assert config.model.family == "cri"
+    assert config.model.edge_types == 2
+    assert config.data.time_step == 1.0
+    assert config.data.distance_cutoff == 20.0
+    assert config.data.max_neighbors == 2
+    assert config.training is not None
+    assert config.training.entropy_weight == 0.0
+    assert config.training.no_edge_weight == 0.0

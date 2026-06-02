@@ -131,3 +131,44 @@ def test_write_pair_scores_csv_writes_expected_columns_and_sorted_rows(tmp_path:
             "residue_j_name": "THR",
         },
     ]
+
+
+def test_write_pair_scores_csv_includes_edge_type_probabilities_when_present(tmp_path: Path) -> None:
+    output_path = tmp_path / "scores_with_types.csv"
+    scores = [
+        {
+            "residue_i": {
+                "index": 0,
+                "chain_id": "A",
+                "residue_number": 1,
+                "name": "GLY",
+            },
+            "residue_j": {
+                "index": 1,
+                "chain_id": "A",
+                "residue_number": 2,
+                "name": "ALA",
+            },
+            "score": 0.9,
+            "edge_type_probabilities": [0.8, 0.2],
+        },
+    ]
+
+    write_pair_scores_csv(output_path, scores)  # type: ignore[arg-type]
+
+    rows = list(csv.DictReader(output_path.open(newline="", encoding="utf-8")))
+    assert rows == [
+        {
+            "rank": "1",
+            "score": "0.9",
+            "residue_i_index": "0",
+            "residue_i_chain": "A",
+            "residue_i_number": "1",
+            "residue_i_name": "GLY",
+            "residue_j_index": "1",
+            "residue_j_chain": "A",
+            "residue_j_number": "2",
+            "residue_j_name": "ALA",
+            "edge_type_probabilities": "[0.8, 0.2]",
+        }
+    ]

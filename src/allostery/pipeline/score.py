@@ -4,11 +4,12 @@ from pathlib import Path
 from typing import TypedDict
 
 import torch
-from torch import Tensor
+from torch import Tensor, nn
 
 from allostery.data import build_training_samples
 from allostery.io.checkpoint import load_checkpoint
 from allostery.io.pdb import ResidueRecord, load_multimodel_pdb
+from allostery.models.cri import CRILatentInteractionModel
 from allostery.models.relational import RelationalScoreModel
 
 
@@ -23,6 +24,7 @@ class PairScore(TypedDict):
     residue_i: ResidueIdentifier
     residue_j: ResidueIdentifier
     score: float
+
 
 
 def _tensorize_window(
@@ -46,17 +48,25 @@ def _residue_identifier(residue: ResidueRecord) -> ResidueIdentifier:
     }
 
 
-def load_scoring_model(checkpoint_path: str | Path) -> RelationalScoreModel:
+def load_scoring_model(checkpoint_path: str | Path) -> nn.Module:
     checkpoint = load_checkpoint(checkpoint_path)
-    model = RelationalScoreModel(
-        residue_dim=checkpoint.residue_dim,
-        pair_dim=checkpoint.pair_dim,
-        hidden_dim=checkpoint.hidden_dim,
-        target_dim=checkpoint.target_dim,
-        residue_layers=checkpoint.residue_layers,
-        pair_layers=checkpoint.pair_layers,
-        dropout=checkpoint.dropout,
-    )
+    if checkpoint.model_family == "cri":
+        model = CRILatentInteractionModel(
+            state_dim=checkpoint.residue_dim,
+            hidden_dim=checkpoint.hidden_dim,
+            edge_types=checkpoint.pair_layers,
+            dropout=checkpoint.dropout,
+        )
+    else:
+        model = RelationalScoreModel(
+            residue_dim=checkpoint.residue_dim,
+            pair_dim=checkpoint.pair_dim,
+            hidden_dim=checkpoint.hidden_dim,
+            target_dim=checkpoint.target_dim,
+            residue_layers=checkpoint.residue_layers,
+            pair_layers=checkpoint.pair_layers,
+            dropout=checkpoint.dropout,
+        )
     model.load_state_dict(checkpoint.state_dict)
     model.eval()
     return model
