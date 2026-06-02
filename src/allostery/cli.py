@@ -7,6 +7,8 @@ from typing import Any, Sequence
 
 from allostery.config import AppConfig, load_config
 from allostery.io import write_pair_scores_csv
+from allostery.pipeline.cri_score import score_cri_trajectory
+from allostery.pipeline.cri_train import train_cri_model
 from allostery.pipeline.score import load_scoring_model, score_trajectory
 from allostery.pipeline.train import TrainResult, train_model
 
@@ -38,6 +40,27 @@ def _run_train(config: AppConfig) -> TrainResult:
     if training is None or model_path is None:
         raise ValueError("train mode requires training config and model_path")
 
+    if config.model.family == "cri":
+        result = train_cri_model(
+            pdb_path=config.data.pdb_path,
+            window_size=config.data.window_size,
+            stride=config.data.stride,
+            time_step=config.data.time_step,
+            distance_cutoff=config.data.distance_cutoff,
+            max_neighbors=config.data.max_neighbors,
+            edge_types=int(config.model.edge_types or 0),
+            hidden_dim=config.model.hidden_dim,
+            dropout=config.model.dropout,
+            epochs=training.epochs,
+            learning_rate=training.learning_rate,
+            entropy_weight=training.entropy_weight,
+            no_edge_weight=training.no_edge_weight,
+            checkpoint_path=model_path,
+            config_snapshot=_serialize_config(config),
+        )
+        print(f"trained samples={result.num_samples} checkpoint={model_path}")
+        return result  # type: ignore[return-value]
+
     result = train_model(
         pdb_path=config.data.pdb_path,
         window_size=config.data.window_size,
@@ -65,13 +88,24 @@ def _run_score(config: AppConfig) -> int:
         raise ValueError("score mode requires scoring config, model_path, and score_csv_path")
 
     model = load_scoring_model(model_path)
-    scores = score_trajectory(
-        model=model,
-        pdb_path=config.data.pdb_path,
-        window_size=config.data.window_size,
-        horizon_size=config.data.horizon_size,
-        stride=config.data.stride,
-    )
+    if config.model.family == "cri":
+        scores = score_cri_trajectory(
+            model=model,  # type: ignore[arg-type]
+            pdb_path=config.data.pdb_path,
+            window_size=config.data.window_size,
+            stride=config.data.stride,
+            time_step=config.data.time_step,
+            distance_cutoff=config.data.distance_cutoff,
+            max_neighbors=config.data.max_neighbors,
+        )
+    else:
+        scores = score_trajectory(
+            model=model,  # type: ignore[arg-type]
+            pdb_path=config.data.pdb_path,
+            window_size=config.data.window_size,
+            horizon_size=config.data.horizon_size,
+            stride=config.data.stride,
+        )
     write_pair_scores_csv(score_csv_path, scores)
     print(f"scored pairs={len(scores)} csv={score_csv_path} top_k={scoring.top_k}")
     return len(scores)

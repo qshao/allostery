@@ -15,6 +15,9 @@ class DataConfig:
     window_size: int
     horizon_size: int
     stride: int
+    time_step: float = 1.0
+    distance_cutoff: float = 20.0
+    max_neighbors: int = 2
 
 
 @dataclass(frozen=True, slots=True)
@@ -23,6 +26,8 @@ class ModelConfig:
     residue_layers: int
     pair_layers: int
     dropout: float
+    family: str = "relational"
+    edge_types: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -30,6 +35,8 @@ class TrainingConfig:
     epochs: int
     learning_rate: float
     consistency_weight: float
+    entropy_weight: float = 0.0
+    no_edge_weight: float = 0.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -75,6 +82,8 @@ def load_config(path: str | Path) -> AppConfig:
             epochs=int(_require_value(training_raw, "epochs")),
             learning_rate=float(_require_value(training_raw, "learning_rate")),
             consistency_weight=float(_require_value(training_raw, "consistency_weight")),
+            entropy_weight=float(training_raw.get("entropy_weight", 0.0)),
+            no_edge_weight=float(training_raw.get("no_edge_weight", 0.0)),
         )
 
     scoring = None
@@ -89,12 +98,17 @@ def load_config(path: str | Path) -> AppConfig:
             window_size=int(_require_value(data_raw, "window_size")),
             horizon_size=int(_require_value(data_raw, "horizon_size")),
             stride=int(_require_value(data_raw, "stride")),
+            time_step=float(data_raw.get("time_step", 1.0)),
+            distance_cutoff=float(data_raw.get("distance_cutoff", 20.0)),
+            max_neighbors=int(data_raw.get("max_neighbors", 2)),
         ),
         model=ModelConfig(
             hidden_dim=int(_require_value(model_raw, "hidden_dim")),
             residue_layers=int(_require_value(model_raw, "residue_layers")),
             pair_layers=int(_require_value(model_raw, "pair_layers")),
             dropout=float(_require_value(model_raw, "dropout")),
+            family=str(model_raw.get("family", "relational")),
+            edge_types=int(model_raw["edge_types"]) if model_raw.get("edge_types") is not None else None,
         ),
         training=training,
         scoring=scoring,
@@ -169,12 +183,25 @@ def validate_config(config: AppConfig) -> None:
         raise ValueError("horizon_size must be greater than zero")
     if config.data.stride <= 0:
         raise ValueError("stride must be greater than zero")
+    if config.data.time_step <= 0:
+        raise ValueError("time_step must be greater than zero")
+    if config.data.distance_cutoff <= 0:
+        raise ValueError("distance_cutoff must be greater than zero")
+    if config.data.max_neighbors <= 0:
+        raise ValueError("max_neighbors must be greater than zero")
     if config.model.hidden_dim <= 0:
         raise ValueError("hidden_dim must be greater than zero")
     if config.model.residue_layers <= 0:
         raise ValueError("residue_layers must be greater than zero")
     if config.model.pair_layers <= 0:
         raise ValueError("pair_layers must be greater than zero")
+    if config.model.family not in {"relational", "cri"}:
+        raise ValueError("family must be one of relational or cri")
+    if config.model.family == "cri":
+        if config.model.edge_types is None:
+            raise ValueError("edge_types is required for cri model family")
+        if config.model.edge_types < 2:
+            raise ValueError("edge_types must be at least 2")
     if not 0.0 <= config.model.dropout < 1.0:
         raise ValueError("dropout must be greater than or equal to zero and less than one")
     if config.mode in {"train", "run"}:
@@ -184,6 +211,10 @@ def validate_config(config: AppConfig) -> None:
             raise ValueError("epochs must be greater than zero")
         if config.training.learning_rate <= 0:
             raise ValueError("learning_rate must be greater than zero")
+        if config.training.entropy_weight < 0:
+            raise ValueError("entropy_weight must be greater than or equal to zero")
+        if config.training.no_edge_weight < 0:
+            raise ValueError("no_edge_weight must be greater than or equal to zero")
     if config.mode in {"score", "run"}:
         if config.scoring is None:
             raise ValueError(f"scoring section is required for {config.mode} mode")

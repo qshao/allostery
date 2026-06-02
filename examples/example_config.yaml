@@ -7,6 +7,7 @@ data:
   stride: 1
 
 model:
+  family: relational
   hidden_dim: 8
   residue_layers: 3
   pair_layers: 4

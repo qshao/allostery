@@ -19,6 +19,7 @@ class ModelCheckpoint:
     dropout: float
     target_dim: int
     config: dict[str, Any]
+    model_family: str = "relational"
 
 
 def save_checkpoint(
@@ -32,6 +33,7 @@ def save_checkpoint(
     residue_layers: int = 2,
     pair_layers: int = 2,
     dropout: float = 0.0,
+    model_family: str = "relational",
 ) -> None:
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -46,6 +48,7 @@ def save_checkpoint(
             "dropout": dropout,
             "target_dim": target_dim,
             "config": dict(config_snapshot),
+            "model_family": model_family,
         },
         target,
     )
@@ -63,6 +66,7 @@ def load_checkpoint(path: str | Path) -> ModelCheckpoint:
         dropout=float(raw.get("dropout", 0.0)),
         target_dim=int(raw["target_dim"]),
         config=dict(_require_mapping(raw, "config")),
+        model_family=str(raw.get("model_family", "relational")),
     )
 
 

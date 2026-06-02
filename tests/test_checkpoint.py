@@ -59,3 +59,31 @@ def test_checkpoint_round_trip(tmp_path: Path) -> None:
     assert loaded.state_dict.keys() == model.state_dict().keys()
     for name, tensor in model.state_dict().items():
         assert torch.equal(loaded.state_dict[name], tensor)
+
+
+def test_checkpoint_round_trips_model_family(tmp_path: Path) -> None:
+    from allostery.io.checkpoint import load_checkpoint, save_checkpoint
+    from allostery.models.cri import CRILatentInteractionModel
+
+    model = CRILatentInteractionModel(state_dim=6, hidden_dim=8, edge_types=2)
+    checkpoint_path = tmp_path / "cri.pt"
+
+    save_checkpoint(
+        path=checkpoint_path,
+        model=model,
+        config_snapshot={"model": {"family": "cri"}},
+        residue_dim=6,
+        pair_dim=1,
+        hidden_dim=8,
+        target_dim=3,
+        residue_layers=1,
+        pair_layers=2,
+        dropout=0.0,
+        model_family="cri",
+    )
+
+    loaded = load_checkpoint(checkpoint_path)
+
+    assert loaded.model_family == "cri"
+    assert loaded.residue_dim == 6
+    assert isinstance(loaded.state_dict, dict)

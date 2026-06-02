@@ -219,3 +219,60 @@ def test_cli_score_mode_uses_checkpoint_and_writes_csv(tmp_path: Path, fixture_p
         f"scored pairs=3 csv={score_csv_path} top_k=2",
         "completed mode=score",
     ]
+
+
+def test_cli_cri_run_mode_writes_checkpoint_and_scores_csv(tmp_path: Path, fixture_path: Path, capsys) -> None:
+    from allostery.cli import main
+
+    config_path = tmp_path / "cri_run.yaml"
+    checkpoint_path = tmp_path / "artifacts" / "cri_model.pt"
+    score_csv_path = tmp_path / "artifacts" / "cri_scores.csv"
+    _write_config(
+        config_path,
+        [
+            "mode: run",
+            "data:",
+            f"  pdb_path: {fixture_path / 'tiny_trajectory.pdb'}",
+            "  window_size: 3",
+            "  horizon_size: 1",
+            "  stride: 1",
+            "  time_step: 1.0",
+            "  distance_cutoff: 20.0",
+            "  max_neighbors: 2",
+            "model:",
+            "  family: cri",
+            "  hidden_dim: 8",
+            "  residue_layers: 1",
+            "  pair_layers: 2",
+            "  dropout: 0.0",
+            "  edge_types: 2",
+            "training:",
+            "  epochs: 1",
+            "  learning_rate: 0.001",
+            "  consistency_weight: 0.0",
+            "  entropy_weight: 0.0",
+            "  no_edge_weight: 0.0",
+            "scoring:",
+            "  top_k: 2",
+            "output:",
+            f"  model_path: {checkpoint_path}",
+            f"  score_csv_path: {score_csv_path}",
+        ],
+    )
+
+    exit_code = main([str(config_path)])
+
+    assert exit_code == 0
+    assert checkpoint_path.exists()
+    assert score_csv_path.exists()
+
+    rows = list(csv.DictReader(score_csv_path.open(encoding="utf-8")))
+    assert len(rows) == 3
+    assert "edge_type_probabilities" in rows[0]
+
+    captured = capsys.readouterr()
+    assert captured.out.splitlines() == [
+        f"trained samples=1 checkpoint={checkpoint_path}",
+        f"scored pairs=3 csv={score_csv_path} top_k=2",
+        "completed mode=run",
+    ]
