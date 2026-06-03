@@ -17,11 +17,27 @@ def test_build_directed_contact_graph_uses_cutoff_and_top_k() -> None:
 
     graph = build_directed_contact_graph(coordinates, distance_cutoff=3.0, max_neighbors=1)
 
-    np.testing.assert_array_equal(
-        graph.edge_index,
-        np.array([[1, 0], [0, 1], [1, 2]], dtype=np.int64),
-    )
+    np.testing.assert_array_equal(graph.edge_index, np.array([[1, 0], [0, 1], [1, 2]], dtype=np.int64))
     np.testing.assert_allclose(graph.mean_distances, np.array([1.5, 1.5, 2.5], dtype=np.float32), atol=1e-6)
+
+
+def test_build_directed_contact_graph_can_enforce_sequence_separation() -> None:
+    coordinates = np.array(
+        [
+            [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [2.0, 0.0, 0.0], [5.0, 0.0, 0.0]],
+            [[0.0, 0.0, 0.0], [1.1, 0.0, 0.0], [2.1, 0.0, 0.0], [5.1, 0.0, 0.0]],
+        ],
+        dtype=np.float32,
+    )
+
+    graph = build_directed_contact_graph(
+        coordinates,
+        distance_cutoff=3.0,
+        max_neighbors=2,
+        min_sequence_separation=2,
+    )
+
+    assert all(abs(int(sender) - int(receiver)) >= 2 for sender, receiver in graph.edge_index)
 
 
 def test_incoming_edge_indices_groups_edges_by_receiver() -> None:

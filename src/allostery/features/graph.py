@@ -17,11 +17,14 @@ def build_directed_contact_graph(
     window_coordinates: np.ndarray,
     distance_cutoff: float,
     max_neighbors: int,
+    min_sequence_separation: int = 0,
 ) -> DirectedContactGraph:
     if distance_cutoff <= 0.0:
         raise ValueError("distance_cutoff must be greater than zero")
     if max_neighbors <= 0:
         raise ValueError("max_neighbors must be greater than zero")
+    if min_sequence_separation < 0:
+        raise ValueError("min_sequence_separation must be greater than or equal to zero")
 
     coordinates = _validate_coordinate_window(window_coordinates)
     if not np.isfinite(coordinates).all():
@@ -38,7 +41,9 @@ def build_directed_contact_graph(
         candidates = [
             (float(distances[sender, receiver]), sender)
             for sender in range(num_residues)
-            if sender != receiver and distances[sender, receiver] <= distance_cutoff
+            if sender != receiver
+            and abs(sender - receiver) >= min_sequence_separation
+            and distances[sender, receiver] <= distance_cutoff
         ]
         candidates.sort(key=lambda item: (item[0], item[1]))
         for distance, sender in candidates[:max_neighbors]:

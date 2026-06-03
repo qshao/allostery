@@ -14,8 +14,8 @@ from allostery.pipeline.train import TrainResult, train_model
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="allostery")
-    parser.add_argument("config_path")
+    parser = argparse.ArgumentParser(prog='allostery')
+    parser.add_argument('config_path')
     return parser
 
 
@@ -23,14 +23,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     config = load_config(args.config_path)
 
-    if config.mode == "train":
+    if config.mode == 'train':
         _run_train(config)
-    elif config.mode == "score":
+    elif config.mode == 'score':
         _run_score(config)
     else:
         _run_run(config)
 
-    print(f"completed mode={config.mode}")
+    print(f'completed mode={config.mode}')
     return 0
 
 
@@ -38,9 +38,9 @@ def _run_train(config: AppConfig) -> TrainResult:
     training = config.training
     model_path = config.output.model_path
     if training is None or model_path is None:
-        raise ValueError("train mode requires training config and model_path")
+        raise ValueError('train mode requires training config and model_path')
 
-    if config.model.family == "cri":
+    if config.model.family == 'cri':
         result = train_cri_model(
             pdb_path=config.data.pdb_path,
             window_size=config.data.window_size,
@@ -48,6 +48,13 @@ def _run_train(config: AppConfig) -> TrainResult:
             time_step=config.data.time_step,
             distance_cutoff=config.data.distance_cutoff,
             max_neighbors=config.data.max_neighbors,
+            min_sequence_separation=config.data.min_sequence_separation,
+            preprocess=config.data.preprocess,
+            validation_fraction=training.validation_fraction,
+            patience=training.patience,
+            seed=training.seed,
+            device=training.device,
+            batch_size=training.batch_size,
             edge_types=int(config.model.edge_types or 0),
             hidden_dim=config.model.hidden_dim,
             dropout=config.model.dropout,
@@ -58,7 +65,7 @@ def _run_train(config: AppConfig) -> TrainResult:
             checkpoint_path=model_path,
             config_snapshot=_serialize_config(config),
         )
-        print(f"trained samples={result.num_samples} checkpoint={model_path}")
+        print(f'trained samples={result.num_samples} checkpoint={model_path}')
         return result  # type: ignore[return-value]
 
     result = train_model(
@@ -73,10 +80,15 @@ def _run_train(config: AppConfig) -> TrainResult:
         epochs=training.epochs,
         learning_rate=training.learning_rate,
         consistency_weight=training.consistency_weight,
+        validation_fraction=training.validation_fraction,
+        patience=training.patience,
+        seed=training.seed,
+        device=training.device,
+        batch_size=training.batch_size,
         checkpoint_path=model_path,
         config_snapshot=_serialize_config(config),
     )
-    print(f"trained samples={result.num_samples} checkpoint={model_path}")
+    print(f'trained samples={result.num_samples} checkpoint={model_path}')
     return result
 
 
@@ -85,10 +97,10 @@ def _run_score(config: AppConfig) -> int:
     model_path = config.output.model_path
     score_csv_path = config.output.score_csv_path
     if scoring is None or model_path is None or score_csv_path is None:
-        raise ValueError("score mode requires scoring config, model_path, and score_csv_path")
+        raise ValueError('score mode requires scoring config, model_path, and score_csv_path')
 
     model = load_scoring_model(model_path)
-    if config.model.family == "cri":
+    if config.model.family == 'cri':
         scores = score_cri_trajectory(
             model=model,  # type: ignore[arg-type]
             pdb_path=config.data.pdb_path,
@@ -97,6 +109,8 @@ def _run_score(config: AppConfig) -> int:
             time_step=config.data.time_step,
             distance_cutoff=config.data.distance_cutoff,
             max_neighbors=config.data.max_neighbors,
+            min_sequence_separation=config.data.min_sequence_separation,
+            preprocess=config.data.preprocess,
         )
     else:
         scores = score_trajectory(
@@ -107,7 +121,7 @@ def _run_score(config: AppConfig) -> int:
             stride=config.data.stride,
         )
     write_pair_scores_csv(score_csv_path, scores)
-    print(f"scored pairs={len(scores)} csv={score_csv_path} top_k={scoring.top_k}")
+    print(f'scored pairs={len(scores)} csv={score_csv_path} top_k={scoring.top_k}')
     return len(scores)
 
 
@@ -132,5 +146,5 @@ def _serialize_value(value: Any) -> Any:
     return value
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     raise SystemExit(main())

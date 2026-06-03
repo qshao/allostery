@@ -25,23 +25,28 @@ def build_cri_training_samples(
     time_step: float,
     distance_cutoff: float,
     max_neighbors: int,
+    min_sequence_separation: int = 0,
+    preprocess: str = "none",
 ) -> list[CRISample]:
     trajectory = _validate_coordinate_window(coordinates)
     if window_size < 3:
         raise ValueError("window_size must be at least 3 for central differences")
     if stride <= 0:
         raise ValueError("stride must be greater than zero")
+    if min_sequence_separation < 0:
+        raise ValueError("min_sequence_separation must be greater than or equal to zero")
     if trajectory.shape[0] < window_size:
         return []
 
     samples: list[CRISample] = []
     for start in range(0, trajectory.shape[0] - window_size + 1, stride):
         window = trajectory[start : start + window_size]
-        dynamics = build_residue_dynamics(window, time_step=time_step)
+        dynamics = build_residue_dynamics(window, time_step=time_step, preprocess=preprocess)
         graph = build_directed_contact_graph(
             window,
             distance_cutoff=distance_cutoff,
             max_neighbors=max_neighbors,
+            min_sequence_separation=min_sequence_separation,
         )
         samples.append(
             CRISample(

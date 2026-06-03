@@ -115,6 +115,12 @@ class TrainingTestCase(unittest.TestCase):
                     },
                 },
             )
+            self.assertEqual(checkpoint.metadata["training"]["train_samples"], 1)
+            self.assertEqual(checkpoint.metadata["training"]["validation_samples"], 1)
+            self.assertEqual(checkpoint.metadata["training"]["batch_size"], 4)
+            self.assertEqual(result.train_samples, 1)
+            self.assertEqual(result.validation_samples, 1)
+            self.assertEqual(result.batch_size, 4)
 
             direct_scores = score_trajectory(
                 model=result.model,
@@ -131,6 +137,39 @@ class TrainingTestCase(unittest.TestCase):
                 stride=1,
             )
             self.assertEqual(direct_scores, loaded_scores)
+
+    def test_score_trajectory_rejects_cri_checkpoints(self) -> None:
+        from allostery.pipeline.cri_train import train_cri_model
+        from allostery.pipeline.score import load_scoring_model, score_trajectory
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            checkpoint_path = Path(tmp_dir) / "cri-model.pt"
+            train_cri_model(
+                pdb_path=self.fixture_path,
+                window_size=3,
+                stride=1,
+                time_step=1.0,
+                distance_cutoff=20.0,
+                max_neighbors=2,
+                edge_types=2,
+                hidden_dim=8,
+                dropout=0.0,
+                epochs=1,
+                learning_rate=1e-3,
+                entropy_weight=0.0,
+                no_edge_weight=0.0,
+                checkpoint_path=checkpoint_path,
+            )
+
+            model = load_scoring_model(checkpoint_path)
+            with self.assertRaisesRegex(ValueError, "requires a relational checkpoint"):
+                score_trajectory(
+                    model=model,
+                    pdb_path=self.fixture_path,
+                    window_size=1,
+                    horizon_size=1,
+                    stride=1,
+                )
 
     def test_train_model_errors_when_no_windows_are_available(self) -> None:
         from allostery.pipeline.train import train_model

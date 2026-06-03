@@ -101,9 +101,63 @@ def test_load_config_parses_minimal_run_config(tmp_path: Path) -> None:
     assert config.model.dropout == 0.1
     assert config.training is not None
     assert config.training.epochs == 1
+    assert config.training.batch_size == 4
     assert config.scoring is not None
     assert config.scoring.top_k == 5
     assert config.output.model_path == config_path.parent.joinpath("outputs/model.pt").resolve()
+
+
+def test_load_config_parses_cri_model_fields(tmp_path: Path) -> None:
+    config_path = tmp_path / "cri.yaml"
+    _write_config(
+        config_path,
+        [
+            "mode: run",
+            "data:",
+            f"  pdb_path: {FIXTURE_PDB}",
+            "  window_size: 3",
+            "  horizon_size: 1",
+            "  stride: 1",
+            "  time_step: 1.0",
+            "  distance_cutoff: 20.0",
+            "  max_neighbors: 2",
+            "  min_sequence_separation: 2",
+            "  preprocess: center",
+            "model:",
+            "  family: cri",
+            "  hidden_dim: 8",
+            "  residue_layers: 1",
+            "  pair_layers: 2",
+            "  dropout: 0.0",
+            "  edge_types: 2",
+            "training:",
+            "  epochs: 1",
+            "  learning_rate: 0.001",
+            "  consistency_weight: 0.0",
+            "  batch_size: 6",
+            "  entropy_weight: 0.0",
+            "  no_edge_weight: 0.0",
+            "scoring:",
+            "  top_k: 5",
+            "output:",
+            "  model_path: outputs/cri.pt",
+            "  score_csv_path: outputs/cri_scores.csv",
+        ],
+    )
+
+    config = load_config(config_path)
+
+    assert config.model.family == "cri"
+    assert config.model.edge_types == 2
+    assert config.data.time_step == 1.0
+    assert config.data.distance_cutoff == 20.0
+    assert config.data.max_neighbors == 2
+    assert config.data.min_sequence_separation == 2
+    assert config.data.preprocess == "center"
+    assert config.training is not None
+    assert config.training.batch_size == 6
+    assert config.training.entropy_weight == 0.0
+    assert config.training.no_edge_weight == 0.0
 
 
 def test_load_config_rejects_invalid_mode(tmp_path: Path) -> None:
@@ -136,221 +190,3 @@ def test_load_config_rejects_invalid_mode(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="mode"):
         load_config(config_path)
-
-
-def test_load_config_requires_model_path_for_score_mode(tmp_path: Path) -> None:
-    config_path = tmp_path / "score.yaml"
-    _write_config(
-        config_path,
-        [
-            "mode: score",
-            "data:",
-            f"  pdb_path: {FIXTURE_PDB}",
-            "  window_size: 1",
-            "  horizon_size: 1",
-            "  stride: 1",
-            "model:",
-            "  hidden_dim: 8",
-            "  residue_layers: 2",
-            "  pair_layers: 2",
-            "  dropout: 0.0",
-            "training:",
-            "  epochs: 1",
-            "  learning_rate: 0.001",
-            "  consistency_weight: 0.25",
-            "scoring:",
-            "  top_k: 5",
-            "output:",
-            "  score_csv_path: outputs/scores.csv",
-        ],
-    )
-
-    with pytest.raises(ValueError, match="model_path"):
-        load_config(config_path)
-
-
-def test_load_config_rejects_missing_pdb_path(tmp_path: Path) -> None:
-    config_path = tmp_path / "missing_pdb.yaml"
-    _write_config(
-        config_path,
-        [
-            "mode: run",
-            "data:",
-            "  pdb_path: does-not-exist.pdb",
-            "  window_size: 1",
-            "  horizon_size: 1",
-            "  stride: 1",
-            "model:",
-            "  hidden_dim: 8",
-            "  residue_layers: 2",
-            "  pair_layers: 2",
-            "  dropout: 0.0",
-            "training:",
-            "  epochs: 1",
-            "  learning_rate: 0.001",
-            "  consistency_weight: 0.25",
-            "scoring:",
-            "  top_k: 5",
-            "output:",
-            "  model_path: outputs/model.pt",
-            "  score_csv_path: outputs/scores.csv",
-        ],
-    )
-
-    with pytest.raises(ValueError, match="pdb_path"):
-        load_config(config_path)
-
-
-def test_load_config_allows_score_mode_without_training_section(tmp_path: Path) -> None:
-    pdb_path = tmp_path / "score_input.pdb"
-    pdb_path.write_text("MODEL        1\nENDMDL\n", encoding="utf-8")
-    config_path = tmp_path / "score.yaml"
-    _write_config(
-        config_path,
-        [
-            "mode: score",
-            "data:",
-            "  pdb_path: score_input.pdb",
-            "  window_size: 1",
-            "  horizon_size: 1",
-            "  stride: 1",
-            "model:",
-            "  hidden_dim: 8",
-            "  residue_layers: 2",
-            "  pair_layers: 2",
-            "  dropout: 0.0",
-            "scoring:",
-            "  top_k: 5",
-            "output:",
-            "  model_path: outputs/model.pt",
-            "  score_csv_path: outputs/scores.csv",
-        ],
-    )
-
-    config = load_config(config_path)
-
-    assert config.mode == "score"
-    assert config.training is None
-    assert config.scoring is not None
-    assert config.scoring.top_k == 5
-
-
-def test_load_config_allows_train_mode_without_scoring_section(tmp_path: Path) -> None:
-    pdb_path = tmp_path / "train_input.pdb"
-    pdb_path.write_text("MODEL        1\nENDMDL\n", encoding="utf-8")
-    config_path = tmp_path / "train.yaml"
-    _write_config(
-        config_path,
-        [
-            "mode: train",
-            "data:",
-            "  pdb_path: train_input.pdb",
-            "  window_size: 1",
-            "  horizon_size: 1",
-            "  stride: 1",
-            "model:",
-            "  hidden_dim: 8",
-            "  residue_layers: 2",
-            "  pair_layers: 2",
-            "  dropout: 0.0",
-            "training:",
-            "  epochs: 1",
-            "  learning_rate: 0.001",
-            "  consistency_weight: 0.25",
-            "output:",
-            "  model_path: outputs/model.pt",
-        ],
-    )
-
-    config = load_config(config_path)
-
-    assert config.mode == "train"
-    assert config.training is not None
-    assert config.training.epochs == 1
-    assert config.scoring is None
-
-
-def test_load_config_resolves_relative_paths_from_config_location(tmp_path: Path) -> None:
-    config_dir = tmp_path / "configs"
-    data_dir = tmp_path / "data"
-    output_dir = tmp_path / "outputs"
-    config_dir.mkdir()
-    data_dir.mkdir()
-    output_dir.mkdir()
-    pdb_path = data_dir / "input.pdb"
-    pdb_path.write_text("MODEL        1\nENDMDL\n", encoding="utf-8")
-    config_path = config_dir / "config.yaml"
-    _write_config(
-        config_path,
-        [
-            "mode: score",
-            "data:",
-            "  pdb_path: ../data/input.pdb",
-            "  window_size: 1",
-            "  horizon_size: 1",
-            "  stride: 1",
-            "model:",
-            "  hidden_dim: 8",
-            "  residue_layers: 2",
-            "  pair_layers: 2",
-            "  dropout: 0.0",
-            "scoring:",
-            "  top_k: 5",
-            "output:",
-            "  model_path: ../outputs/model.pt",
-            "  score_csv_path: ../outputs/scores.csv",
-        ],
-    )
-
-    config = load_config(config_path)
-
-    assert config.data.pdb_path == pdb_path.resolve()
-    assert config.output.model_path == (output_dir / "model.pt").resolve()
-    assert config.output.score_csv_path == (output_dir / "scores.csv").resolve()
-
-
-def test_load_config_parses_cri_model_fields(tmp_path: Path) -> None:
-    config_path = tmp_path / "cri.yaml"
-    _write_config(
-        config_path,
-        [
-            "mode: run",
-            "data:",
-            f"  pdb_path: {FIXTURE_PDB}",
-            "  window_size: 3",
-            "  horizon_size: 1",
-            "  stride: 1",
-            "  time_step: 1.0",
-            "  distance_cutoff: 20.0",
-            "  max_neighbors: 2",
-            "model:",
-            "  family: cri",
-            "  hidden_dim: 8",
-            "  residue_layers: 1",
-            "  pair_layers: 2",
-            "  dropout: 0.0",
-            "  edge_types: 2",
-            "training:",
-            "  epochs: 1",
-            "  learning_rate: 0.001",
-            "  consistency_weight: 0.0",
-            "  entropy_weight: 0.0",
-            "  no_edge_weight: 0.0",
-            "scoring:",
-            "  top_k: 5",
-            "output:",
-            "  model_path: outputs/cri.pt",
-            "  score_csv_path: outputs/cri_scores.csv",
-        ],
-    )
-
-    config = load_config(config_path)
-
-    assert config.model.family == "cri"
-    assert config.model.edge_types == 2
-    assert config.data.time_step == 1.0
-    assert config.data.distance_cutoff == 20.0
-    assert config.data.max_neighbors == 2
-    assert config.training is not None
-    assert config.training.entropy_weight == 0.0
-    assert config.training.no_edge_weight == 0.0

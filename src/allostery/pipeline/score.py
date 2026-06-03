@@ -91,6 +91,8 @@ def score_trajectory(
             "trajectory did not yield any scoring windows "
             f"for window_size={window_size}, horizon_size={horizon_size}, stride={stride}"
         )
+    if isinstance(model, CRILatentInteractionModel):
+        raise ValueError("score_trajectory requires a relational checkpoint; use score_cri_trajectory for CRI models")
 
     model.eval()
     with torch.no_grad():

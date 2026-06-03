@@ -47,4 +47,7 @@ def test_train_cri_model_runs_on_tiny_trajectory(fixture_path: Path) -> None:
     )
 
     assert result.num_samples == 1
+    assert result.train_samples == 1
+    assert result.validation_samples == 0
+    assert result.batch_size == 4
     assert result.last_loss >= 0.0

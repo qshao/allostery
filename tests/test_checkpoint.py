@@ -56,6 +56,7 @@ def test_checkpoint_round_trip(tmp_path: Path) -> None:
     assert loaded.dropout == 0.15
     assert loaded.target_dim == 3
     assert loaded.config == config_snapshot
+    assert loaded.metadata == {}
     assert loaded.state_dict.keys() == model.state_dict().keys()
     for name, tensor in model.state_dict().items():
         assert torch.equal(loaded.state_dict[name], tensor)
@@ -87,3 +88,36 @@ def test_checkpoint_round_trips_model_family(tmp_path: Path) -> None:
     assert loaded.model_family == "cri"
     assert loaded.residue_dim == 6
     assert isinstance(loaded.state_dict, dict)
+
+
+
+def test_checkpoint_round_trips_metadata(tmp_path: Path) -> None:
+    model = RelationalScoreModel(
+        residue_dim=10,
+        pair_dim=5,
+        hidden_dim=8,
+        target_dim=3,
+        residue_layers=3,
+        pair_layers=4,
+        dropout=0.15,
+    )
+    checkpoint_path = tmp_path / "metadata.pt"
+    metadata = {"training": {"seed": 7, "validation_fraction": 0.25}}
+
+    save_checkpoint(
+        path=checkpoint_path,
+        model=model,
+        config_snapshot={"mode": "train"},
+        residue_dim=10,
+        pair_dim=5,
+        hidden_dim=8,
+        target_dim=3,
+        residue_layers=3,
+        pair_layers=4,
+        dropout=0.15,
+        metadata=metadata,
+    )
+
+    loaded = load_checkpoint(checkpoint_path)
+
+    assert loaded.metadata == metadata

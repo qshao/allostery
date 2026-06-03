@@ -133,8 +133,8 @@ def test_write_pair_scores_csv_writes_expected_columns_and_sorted_rows(tmp_path:
     ]
 
 
-def test_write_pair_scores_csv_includes_edge_type_probabilities_when_present(tmp_path: Path) -> None:
-    output_path = tmp_path / "scores_with_types.csv"
+def test_write_pair_scores_csv_includes_optional_network_metadata(tmp_path: Path) -> None:
+    output_path = tmp_path / "scores_with_metadata.csv"
     scores = [
         {
             "residue_i": {
@@ -150,7 +150,10 @@ def test_write_pair_scores_csv_includes_edge_type_probabilities_when_present(tmp
                 "name": "ALA",
             },
             "score": 0.9,
+            "support_count": 3,
+            "mean_distance": 2.5,
             "edge_type_probabilities": [0.8, 0.2],
+            "edge_type_stddev": [0.1, 0.1],
         },
     ]
 
@@ -169,6 +172,9 @@ def test_write_pair_scores_csv_includes_edge_type_probabilities_when_present(tmp
             "residue_j_chain": "A",
             "residue_j_number": "2",
             "residue_j_name": "ALA",
+            "support_count": "3",
+            "mean_distance": "2.5",
             "edge_type_probabilities": "[0.8, 0.2]",
+            "edge_type_stddev": "[0.1, 0.1]",
         }
     ]

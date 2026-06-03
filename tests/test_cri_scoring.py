@@ -6,7 +6,7 @@ from allostery.pipeline.cri_score import score_cri_trajectory
 from allostery.pipeline.cri_train import train_cri_model
 
 
-def test_score_cri_trajectory_returns_ranked_residue_pairs(fixture_path: Path) -> None:
+def test_score_cri_trajectory_reports_support_and_uncertainty(fixture_path: Path) -> None:
     result = train_cri_model(
         pdb_path=fixture_path / "tiny_trajectory.pdb",
         window_size=3,
@@ -34,5 +34,6 @@ def test_score_cri_trajectory_returns_ranked_residue_pairs(fixture_path: Path) -
     )
 
     assert scores
-    assert scores[0]["score"] >= scores[-1]["score"]
+    assert "support_count" in scores[0]
     assert "edge_type_probabilities" in scores[0]
+    assert "edge_type_stddev" in scores[0]

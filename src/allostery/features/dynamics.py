@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from allostery.features.alignment import align_trajectory_coordinates, center_trajectory_coordinates
 from allostery.features.residue import _validate_coordinate_window
 
 
@@ -18,7 +19,12 @@ class ResidueDynamics:
         return np.concatenate((self.positions, self.velocities), axis=-1).astype(np.float32, copy=False)
 
 
-def build_residue_dynamics(window_coordinates: np.ndarray, time_step: float = 1.0) -> ResidueDynamics:
+def build_residue_dynamics(
+    window_coordinates: np.ndarray,
+    time_step: float = 1.0,
+    preprocess: str = "none",
+    reference_frame_index: int = 0,
+) -> ResidueDynamics:
     if time_step <= 0.0:
         raise ValueError("time_step must be greater than zero")
 
@@ -27,6 +33,13 @@ def build_residue_dynamics(window_coordinates: np.ndarray, time_step: float = 1.
         raise ValueError("window_coordinates must contain at least 3 frames")
     if not np.isfinite(coordinates).all():
         raise ValueError("window_coordinates must contain only finite values")
+
+    if preprocess == "center":
+        coordinates = center_trajectory_coordinates(coordinates)
+    elif preprocess == "align":
+        coordinates = align_trajectory_coordinates(coordinates, reference_frame_index=reference_frame_index)
+    elif preprocess != "none":
+        raise ValueError("preprocess must be one of none, center, or align")
 
     positions = coordinates[1:-1]
     velocities = (coordinates[2:] - coordinates[:-2]) / (2.0 * time_step)
