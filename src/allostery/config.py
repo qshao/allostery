@@ -39,6 +39,7 @@ class TrainingConfig:
     consistency_weight: float
     entropy_weight: float = 0.0
     no_edge_weight: float = 0.0
+    sparsity_weight: float = 0.0
     validation_fraction: float = 0.2
     patience: int = 5
     seed: int = 0
@@ -91,6 +92,7 @@ def load_config(path: str | Path) -> AppConfig:
             consistency_weight=float(_require_value(training_raw, 'consistency_weight')),
             entropy_weight=float(training_raw.get('entropy_weight', 0.0)),
             no_edge_weight=float(training_raw.get('no_edge_weight', 0.0)),
+            sparsity_weight=float(training_raw.get('sparsity_weight', 0.0)),
             validation_fraction=float(training_raw.get('validation_fraction', 0.2)),
             patience=int(training_raw.get('patience', 5)),
             seed=int(training_raw.get('seed', 0)),
@@ -213,8 +215,8 @@ def validate_config(config: AppConfig) -> None:
         raise ValueError('residue_layers must be greater than zero')
     if config.model.pair_layers <= 0:
         raise ValueError('pair_layers must be greater than zero')
-    if config.model.family not in {'relational', 'cri'}:
-        raise ValueError('family must be one of relational or cri')
+    if config.model.family not in {'relational', 'cri', 'influence'}:
+        raise ValueError('family must be one of relational, cri, or influence')
     if config.model.family == 'cri':
         if config.model.edge_types is None:
             raise ValueError('edge_types is required for cri model family')
@@ -233,6 +235,8 @@ def validate_config(config: AppConfig) -> None:
             raise ValueError('entropy_weight must be greater than or equal to zero')
         if config.training.no_edge_weight < 0:
             raise ValueError('no_edge_weight must be greater than or equal to zero')
+        if config.training.sparsity_weight < 0:
+            raise ValueError('sparsity_weight must be greater than or equal to zero')
         if not 0.0 <= config.training.validation_fraction < 1.0:
             raise ValueError('validation_fraction must be greater than or equal to zero and less than one')
         if config.training.patience < 0:

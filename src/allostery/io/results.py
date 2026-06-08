@@ -24,6 +24,8 @@ OPTIONAL_COLUMNS = [
     "mean_distance",
     "edge_type_probabilities",
     "edge_type_stddev",
+    "influence_i_on_j",
+    "influence_j_on_i",
 ]
 
 
@@ -32,8 +34,11 @@ def write_pair_scores_csv(path: str | Path, scores: Iterable[PairScore]) -> None
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     ranked_scores = sorted(list(scores), key=lambda pair_score: pair_score["score"], reverse=True)
-    has_optional = any(any(key in pair_score for key in OPTIONAL_COLUMNS) for pair_score in ranked_scores)
-    fieldnames = [*CSV_COLUMNS, *OPTIONAL_COLUMNS] if has_optional else CSV_COLUMNS
+    present_optional = [
+        col for col in OPTIONAL_COLUMNS
+        if any(col in pair_score for pair_score in ranked_scores)
+    ]
+    fieldnames = [*CSV_COLUMNS, *present_optional] if present_optional else CSV_COLUMNS
     with output_path.open("w", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(handle, fieldnames=fieldnames)
         writer.writeheader()
@@ -50,7 +55,7 @@ def write_pair_scores_csv(path: str | Path, scores: Iterable[PairScore]) -> None
                 "residue_j_number": pair_score["residue_j"]["residue_number"],
                 "residue_j_name": pair_score["residue_j"]["name"],
             }
-            if has_optional:
+            if present_optional:
                 if "support_count" in pair_score:
                     row["support_count"] = pair_score["support_count"]
                 if "mean_distance" in pair_score:
@@ -59,6 +64,10 @@ def write_pair_scores_csv(path: str | Path, scores: Iterable[PairScore]) -> None
                     row["edge_type_probabilities"] = json.dumps(pair_score["edge_type_probabilities"])
                 if "edge_type_stddev" in pair_score:
                     row["edge_type_stddev"] = json.dumps(pair_score["edge_type_stddev"])
+                if "influence_i_on_j" in pair_score:
+                    row["influence_i_on_j"] = pair_score["influence_i_on_j"]
+                if "influence_j_on_i" in pair_score:
+                    row["influence_j_on_i"] = pair_score["influence_j_on_i"]
             writer.writerow(row)
 
 

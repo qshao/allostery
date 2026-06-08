@@ -9,6 +9,8 @@ from allostery.config import AppConfig, load_config
 from allostery.io import write_pair_scores_csv
 from allostery.pipeline.cri_score import score_cri_trajectory
 from allostery.pipeline.cri_train import train_cri_model
+from allostery.pipeline.influence_score import score_influence_trajectory
+from allostery.pipeline.influence_train import train_influence_model
 from allostery.pipeline.score import load_scoring_model, score_trajectory
 from allostery.pipeline.train import TrainResult, train_model
 
@@ -39,6 +41,30 @@ def _run_train(config: AppConfig) -> TrainResult:
     model_path = config.output.model_path
     if training is None or model_path is None:
         raise ValueError('train mode requires training config and model_path')
+
+    if config.model.family == 'influence':
+        inf_result = train_influence_model(
+            pdb_path=config.data.pdb_path,
+            window_size=config.data.window_size,
+            stride=config.data.stride,
+            time_step=config.data.time_step,
+            preprocess=config.data.preprocess,
+            hidden_dim=config.model.hidden_dim,
+            num_encoder_layers=config.model.residue_layers,
+            dropout=config.model.dropout,
+            epochs=training.epochs,
+            learning_rate=training.learning_rate,
+            sparsity_weight=training.sparsity_weight,
+            validation_fraction=training.validation_fraction,
+            patience=training.patience,
+            seed=training.seed,
+            device=training.device,
+            batch_size=training.batch_size,
+            checkpoint_path=model_path,
+            config_snapshot=_serialize_config(config),
+        )
+        print(f'trained samples={inf_result.num_samples} checkpoint={model_path}')
+        return inf_result  # type: ignore[return-value]
 
     if config.model.family == 'cri':
         result = train_cri_model(
@@ -100,7 +126,16 @@ def _run_score(config: AppConfig) -> int:
         raise ValueError('score mode requires scoring config, model_path, and score_csv_path')
 
     model = load_scoring_model(model_path)
-    if config.model.family == 'cri':
+    if config.model.family == 'influence':
+        scores = score_influence_trajectory(
+            model=model,  # type: ignore[arg-type]
+            pdb_path=config.data.pdb_path,
+            window_size=config.data.window_size,
+            stride=config.data.stride,
+            time_step=config.data.time_step,
+            preprocess=config.data.preprocess,
+        )
+    elif config.model.family == 'cri':
         scores = score_cri_trajectory(
             model=model,  # type: ignore[arg-type]
             pdb_path=config.data.pdb_path,

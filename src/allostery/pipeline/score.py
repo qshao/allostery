@@ -10,6 +10,7 @@ from allostery.data import build_training_samples
 from allostery.io.checkpoint import load_checkpoint
 from allostery.io.pdb import ResidueRecord, load_multimodel_pdb
 from allostery.models.cri import CRILatentInteractionModel
+from allostery.models.influence import AllostericInfluenceModel
 from allostery.models.relational import RelationalScoreModel
 
 
@@ -50,11 +51,18 @@ def _residue_identifier(residue: ResidueRecord) -> ResidueIdentifier:
 
 def load_scoring_model(checkpoint_path: str | Path) -> nn.Module:
     checkpoint = load_checkpoint(checkpoint_path)
-    if checkpoint.model_family == "cri":
+    if checkpoint.model_family == 'cri':
         model = CRILatentInteractionModel(
             state_dim=checkpoint.residue_dim,
             hidden_dim=checkpoint.hidden_dim,
             edge_types=checkpoint.pair_layers,
+            dropout=checkpoint.dropout,
+        )
+    elif checkpoint.model_family == 'influence':
+        model = AllostericInfluenceModel(
+            state_dim=checkpoint.residue_dim,
+            hidden_dim=checkpoint.hidden_dim,
+            num_encoder_layers=checkpoint.residue_layers,
             dropout=checkpoint.dropout,
         )
     else:

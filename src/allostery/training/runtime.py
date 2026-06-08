@@ -9,6 +9,7 @@ from torch import Tensor
 
 from allostery.cri.data import CRISample
 from allostery.data import TrainingSample
+from allostery.influence.data import InfluenceSample
 
 T = TypeVar('T')
 
@@ -19,6 +20,12 @@ class BatchedRelationalSample:
     pair_index: Tensor
     pair_features: Tensor
     targets: Tensor
+
+
+@dataclass(frozen=True, slots=True)
+class BatchedInfluenceSample:
+    state_features: Tensor         # [batch, time, N, state_dim]
+    acceleration_targets: Tensor   # [batch, time, N, 3]
 
 
 @dataclass(frozen=True, slots=True)
@@ -88,6 +95,21 @@ def stack_relational_batch(samples: Sequence[TrainingSample], device: torch.devi
         ),
         targets=torch.stack(
             [torch.as_tensor(sample.targets, dtype=torch.float32, device=device) for sample in samples],
+            dim=0,
+        ),
+    )
+
+
+def stack_influence_batch(samples: Sequence[InfluenceSample], device: torch.device) -> BatchedInfluenceSample:
+    if not samples:
+        raise ValueError('samples must not be empty')
+    return BatchedInfluenceSample(
+        state_features=torch.stack(
+            [torch.as_tensor(s.state_features, dtype=torch.float32, device=device) for s in samples],
+            dim=0,
+        ),
+        acceleration_targets=torch.stack(
+            [torch.as_tensor(s.acceleration_targets, dtype=torch.float32, device=device) for s in samples],
             dim=0,
         ),
     )
