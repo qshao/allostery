@@ -60,6 +60,7 @@ def _run_train(config: AppConfig) -> TrainResult:
             seed=training.seed,
             device=training.device,
             batch_size=training.batch_size,
+            verbose=training.verbose,
             checkpoint_path=model_path,
             config_snapshot=_serialize_config(config),
         )
@@ -88,7 +89,7 @@ def _run_train(config: AppConfig) -> TrainResult:
             learning_rate=training.learning_rate,
             entropy_weight=training.entropy_weight,
             no_edge_weight=training.no_edge_weight,
-            verbose=False,
+            verbose=training.verbose,
             checkpoint_path=model_path,
             config_snapshot=_serialize_config(config),
         )
@@ -112,7 +113,7 @@ def _run_train(config: AppConfig) -> TrainResult:
         seed=training.seed,
         device=training.device,
         batch_size=training.batch_size,
-        verbose=False,
+        verbose=training.verbose,
         checkpoint_path=model_path,
         config_snapshot=_serialize_config(config),
     )

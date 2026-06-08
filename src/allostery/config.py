@@ -45,6 +45,7 @@ class TrainingConfig:
     seed: int = 0
     device: str = 'cpu'
     batch_size: int = 4
+    verbose: bool = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -98,6 +99,7 @@ def load_config(path: str | Path) -> AppConfig:
             seed=int(training_raw.get('seed', 0)),
             device=str(training_raw.get('device', 'cpu')),
             batch_size=int(training_raw.get('batch_size', 4)),
+            verbose=bool(training_raw.get('verbose', True)),
         )
 
     scoring = None
