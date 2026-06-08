@@ -88,6 +88,7 @@ def _run_train(config: AppConfig) -> TrainResult:
             learning_rate=training.learning_rate,
             entropy_weight=training.entropy_weight,
             no_edge_weight=training.no_edge_weight,
+            verbose=False,
             checkpoint_path=model_path,
             config_snapshot=_serialize_config(config),
         )
