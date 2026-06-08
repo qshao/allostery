@@ -73,6 +73,7 @@ def train_influence_model(
     seed: int = 0,
     device: str = 'cpu',
     batch_size: int = 4,
+    verbose: bool = True,
     checkpoint_path: str | Path | None = None,
     config_snapshot: Mapping[str, Any] | None = None,
 ) -> InfluenceTrainResult:
@@ -108,8 +109,11 @@ def train_influence_model(
     epochs_without_improvement = 0
     last_loss = 0.0
 
+    width = len(str(epochs))
     for epoch in range(epochs):
         model.train()
+        epoch_loss_sum = 0.0
+        epoch_batch_count = 0
         for batch_samples in iter_batches(train_samples, batch_size):
             batch = stack_influence_batch(batch_samples, torch_device)
             output = model(batch.state_features)
@@ -118,6 +122,10 @@ def train_influence_model(
             losses.total.backward()
             optimizer.step()
             last_loss = float(losses.total.detach().item())
+            epoch_loss_sum += last_loss
+            epoch_batch_count += 1
+
+        train_loss = epoch_loss_sum / max(epoch_batch_count, 1)
 
         if validation_samples:
             validation_loss = _evaluate_epoch(
@@ -127,7 +135,8 @@ def train_influence_model(
                 sparsity_weight=sparsity_weight,
                 batch_size=batch_size,
             )
-            if best_validation_loss is None or validation_loss < best_validation_loss:
+            is_best = best_validation_loss is None or validation_loss < best_validation_loss
+            if is_best:
                 best_validation_loss = validation_loss
                 best_epoch = epoch
                 best_state = copy.deepcopy(model.state_dict())
@@ -135,7 +144,17 @@ def train_influence_model(
             else:
                 epochs_without_improvement += 1
                 if patience > 0 and epochs_without_improvement >= patience:
+                    if verbose:
+                        print(f"early stop at epoch {epoch + 1}", flush=True)
                     break
+            if verbose:
+                marker = "  [best]" if is_best else ""
+                print(
+                    f"epoch {epoch + 1:>{width}}/{epochs}  train={train_loss:.4f}  val={validation_loss:.4f}{marker}",
+                    flush=True,
+                )
+        elif verbose:
+            print(f"epoch {epoch + 1:>{width}}/{epochs}  train={train_loss:.4f}", flush=True)
 
     if best_validation_loss is not None:
         model.load_state_dict(best_state)
