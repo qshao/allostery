@@ -147,3 +147,33 @@ def test_cri_training_is_silent_when_verbose_false(fixture_path: Path, capsys) -
 
     captured = capsys.readouterr()
     assert captured.out == ""
+
+
+def test_relational_training_prints_epoch_lines_when_verbose(fixture_path: Path, capsys) -> None:
+    from allostery.pipeline.train import train_model
+
+    train_model(
+        pdb_path=fixture_path / "tiny_trajectory.pdb",
+        window_size=1,
+        horizon_size=1,
+        stride=1,
+        hidden_dim=8,
+        residue_layers=1,
+        pair_layers=1,
+        dropout=0.0,
+        epochs=2,
+        learning_rate=1e-3,
+        consistency_weight=0.0,
+        validation_fraction=0.0,
+        patience=0,
+        seed=0,
+        device="cpu",
+        batch_size=1,
+        verbose=True,
+    )
+
+    captured = capsys.readouterr()
+    lines = [l for l in captured.out.splitlines() if l.strip()]
+    assert len(lines) == 2
+    assert lines[0].startswith("epoch 1/2")
+    assert "train=" in lines[0]

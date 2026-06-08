@@ -112,6 +112,7 @@ def _run_train(config: AppConfig) -> TrainResult:
         seed=training.seed,
         device=training.device,
         batch_size=training.batch_size,
+        verbose=False,
         checkpoint_path=model_path,
         config_snapshot=_serialize_config(config),
     )
