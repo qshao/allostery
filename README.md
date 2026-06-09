@@ -19,10 +19,18 @@ allostery --help
 ## Run the example
 
 ```bash
+# Step 1 — train and score
 allostery examples/influence_example_config.yaml
+
+# Step 2 — analyze the allosteric network
+allostery analyze outputs/influence_example_scores.csv --top-k 3
+
+# Step 3 — find allosteric channels between two residues
+allostery analyze outputs/influence_example_scores.csv \
+  --top-k 3 --source "A:1 GLY" --sink "A:3 SER"
 ```
 
-This trains the influence model on the bundled 3-frame fixture and writes a ranked pair-score CSV to `outputs/`.
+`allostery examples/...` trains the influence model on the bundled 3-frame fixture and writes a ranked pair-score CSV to `outputs/`. `allostery analyze` then builds the allosteric network and lists hub residues and communication channels.
 
 ## Virtual Environment
 
@@ -65,7 +73,19 @@ pip install -e ".[dev]"
 pytest -q
 ```
 
-## Run From YAML
+## Commands
+
+The CLI has two commands:
+
+```
+allostery run <config.yaml>   # train / score / run pipeline from YAML config
+allostery analyze <scores.csv> [options]   # post-process: network + channels
+
+# Legacy short form (no subcommand) still works:
+allostery my_config.yaml
+```
+
+### Pipeline (run)
 
 Use a single YAML file to control the whole pipeline:
 
@@ -101,8 +121,6 @@ output:
   score_csv_path: outputs/scores.csv
 ```
 
-Run it with:
-
 ```bash
 allostery my_config.yaml
 ```
@@ -112,6 +130,32 @@ If running directly from the source tree without installing:
 ```bash
 PYTHONPATH=src python -m allostery.cli my_config.yaml
 ```
+
+### Network analysis (analyze)
+
+After scoring, analyze the allosteric network from the scores CSV:
+
+```bash
+# Network summary + hub residues
+allostery analyze outputs/scores.csv --top-k 20
+
+# Add allosteric channel between two residues
+allostery analyze outputs/scores.csv \
+  --top-k 20 \
+  --source "A:12 GLY" \
+  --sink "A:87 SER" \
+  --top-paths 5
+```
+
+Options:
+
+| Flag | Default | Description |
+|---|---|---|
+| `--top-k N` | 20 | Top-N pairs used as graph edges |
+| `--source "CHAIN:NUM NAME"` | — | Source residue for channel search |
+| `--sink "CHAIN:NUM NAME"` | — | Sink residue for channel search |
+| `--top-paths N` | 5 | Shortest paths to list |
+| `--top-hubs N` | 10 | Hub residues to list |
 
 ## Model Families
 

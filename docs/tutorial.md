@@ -15,8 +15,9 @@ This tutorial walks you through installing the package, preparing your trajector
 7. [Model families](#7-model-families)
 8. [Running in three modes](#8-running-in-three-modes)
 9. [Interpreting the output](#9-interpreting-the-output)
-10. [Tuning the model](#10-tuning-the-model)
-11. [Python API](#11-python-api)
+10. [Allosteric network analysis](#10-allosteric-network-analysis)
+11. [Tuning the model](#11-tuning-the-model)
+12. [Python API](#12-python-api)
 
 ---
 
@@ -101,7 +102,12 @@ allostery --help
 Expected output:
 
 ```
-usage: allostery [-h] config_path
+usage: allostery [-h] {run,analyze} ...
+
+positional arguments:
+  {run,analyze}
+    run          Run training/scoring pipeline from config YAML
+    analyze      Analyze allosteric network from scores CSV
 ```
 
 Run the bundled tests to confirm everything works:
@@ -181,7 +187,9 @@ Only the `CA` atom lines are used; all other ATOM records are ignored.
 
 ## 5. Quick start
 
-Run the bundled example on the tiny fixture in under a second:
+Run the full end-to-end pipeline on the bundled 3-residue, 3-frame fixture:
+
+**Step 1 — Train and score:**
 
 ```bash
 allostery examples/influence_example_config.yaml
@@ -190,21 +198,71 @@ allostery examples/influence_example_config.yaml
 Output:
 
 ```
-trained samples=1 checkpoint=/path/to/outputs/influence_example_model.pt
-scored pairs=3 csv=/path/to/outputs/influence_example_scores.csv top_k=10
+epoch 1/5  train=5.3806
+epoch 2/5  train=4.8756
+epoch 3/5  train=4.3966
+epoch 4/5  train=3.9450
+epoch 5/5  train=3.5217
+trained samples=1 checkpoint=outputs/influence_example_model.pt
+scored pairs=3 csv=outputs/influence_example_scores.csv top_k=10
 completed mode=run
 ```
 
-The scores CSV lists every residue pair ranked by their learned allosteric influence score:
+The scores CSV lists every residue pair ranked by learned allosteric influence:
 
 ```
-rank,score,residue_i_index,...,influence_i_on_j,influence_j_on_i
-1,0.508,1,...,0.503,0.513
-2,0.503,0,...,0.497,0.510
-3,0.489,0,...,0.487,0.490
+rank,score,...,influence_i_on_j,influence_j_on_i
+1,0.508,1,A,2,ALA,2,A,3,SER,1,0.503,0.513
+2,0.503,0,A,1,GLY,2,A,3,SER,1,0.497,0.510
+3,0.489,0,A,1,GLY,1,A,2,ALA,1,0.487,0.490
 ```
 
-For a real protein, replace `pdb_path` with your own trajectory file and adjust the hyperparameters as described in [Section 10](#10-tuning-the-model).
+**Step 2 — Analyze the allosteric network:**
+
+```bash
+allostery analyze outputs/influence_example_scores.csv --top-k 3
+```
+
+Output:
+
+```
+=== Allosteric Network ===
+Residues (nodes):       3
+Edges (scored pairs):   3
+Connected components:   1
+
+=== Hub Residues (Top 10 by Betweenness Centrality) ===
+   1.  A:2 ALA               0.0000
+   2.  A:3 SER               0.0000
+   3.  A:1 GLY               0.0000
+```
+
+**Step 3 — Find allosteric channels:**
+
+```bash
+allostery analyze outputs/influence_example_scores.csv \
+  --top-k 3 --source "A:1 GLY" --sink "A:3 SER" --top-paths 3
+```
+
+Output:
+
+```
+=== Allosteric Network ===
+Residues (nodes):       3
+Edges (scored pairs):   3
+Connected components:   1
+
+=== Hub Residues (Top 10 by Betweenness Centrality) ===
+   1.  A:2 ALA               0.0000
+   2.  A:3 SER               0.0000
+   3.  A:1 GLY               0.0000
+
+=== Allosteric Channel: A:1 GLY → A:3 SER ===
+  Path 1 (hops 1):  A:1 GLY → A:3 SER   (dist 1.987)
+  Path 2 (hops 2):  A:1 GLY → A:2 ALA → A:3 SER   (dist 4.015)
+```
+
+For a real protein, replace `pdb_path` with your own trajectory and adjust the hyperparameters as described in [Section 11](#11-tuning-the-model).
 
 ---
 
@@ -350,7 +408,78 @@ After a well-trained run, the influence distribution becomes sparse — a small 
 
 ---
 
-## 10. Tuning the model
+## 10. Allosteric network analysis
+
+Once you have a scores CSV from any pipeline run, use `allostery analyze` to extract the allosteric network and communication channels. This step requires no model checkpoint and works on any scores CSV produced by the `influence`, `cri`, or `relational` pipeline.
+
+### Basic network summary
+
+```bash
+allostery analyze outputs/scores.csv --top-k 20
+```
+
+This builds a weighted undirected graph from the top-20 scoring residue pairs and reports:
+
+- **Residues (nodes):** how many unique residues appear in the top-k pairs
+- **Edges:** number of graph edges (= `--top-k`)
+- **Connected components:** number of disconnected sub-networks (1 = fully connected)
+- **Hub residues:** ranked by betweenness centrality — residues that lie on the most shortest paths through the network. High centrality means the residue is a key relay in allosteric communication.
+
+### Finding allosteric channels
+
+Specify a source and sink residue to find the shortest communication paths:
+
+```bash
+allostery analyze outputs/scores.csv \
+  --top-k 30 \
+  --source "A:12 GLY" \
+  --sink "A:87 SER" \
+  --top-paths 5
+```
+
+Residue labels use the format `CHAIN:NUMBER NAME` exactly as they appear in the `residue_i_chain`, `residue_i_number`, `residue_i_name` columns of the CSV. For example, chain A, residue 12, glycine → `"A:12 GLY"`.
+
+Path distance is defined as the sum of `1/score` along the path: higher-scored edges are treated as shorter. Path 1 is always the most direct (highest-scored) route.
+
+### Choosing `--top-k`
+
+`--top-k` controls how many scored pairs are included as graph edges. Too few and the source/sink may not be connected; too many and the network becomes dense and less informative. A practical starting range is 20–50 pairs. If `allostery analyze` reports "No path found", increase `--top-k`.
+
+### Using the analyze command from Python
+
+```python
+from allostery.network import build_graph, format_report, read_scores_csv
+
+rows = read_scores_csv("outputs/scores.csv")
+net = build_graph(rows, top_k=30)
+report = format_report(
+    net,
+    source_label="A:12 GLY",
+    sink_label="A:87 SER",
+    top_hubs=10,
+    top_paths=5,
+)
+print(report)
+```
+
+You can also access the underlying graph objects directly:
+
+```python
+from allostery.network import betweenness_centrality, shortest_paths
+
+centrality = betweenness_centrality(net)
+# centrality[i] = normalized betweenness for node i
+for i, score in sorted(centrality.items(), key=lambda kv: -kv[1])[:5]:
+    print(f"{net.node_labels[i]}: {score:.4f}")
+
+paths = shortest_paths(net, "A:12 GLY", "A:87 SER", top_n=3)
+for path_labels, dist in paths:
+    print(" → ".join(path_labels), f"(dist {dist:.3f})")
+```
+
+---
+
+## 11. Tuning the model
 
 ### Trajectory preprocessing
 
@@ -411,7 +540,7 @@ python -c "import torch; print(torch.cuda.is_available(), torch.cuda.device_coun
 
 ---
 
-## 11. Python API
+## 12. Python API
 
 You can drive the full pipeline from Python without a YAML config.
 
@@ -513,6 +642,8 @@ with torch.no_grad():
 mean_matrix = torch.stack(matrices).mean(dim=0)  # [N, N]
 # mean_matrix[j, i] = average influence of residue i on residue j
 ```
+
+---
 
 ---
 
