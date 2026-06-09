@@ -369,3 +369,67 @@ def test_missing_topology_path_raises_config_error(tmp_path: Path) -> None:
         load_config(config_path)
     assert "topology_path" in str(exc_info.value)
     assert str(missing_topo) in str(exc_info.value)
+
+
+def test_cuda_device_unavailable_raises_config_error(tmp_path: Path) -> None:
+    import unittest.mock
+    from allostery.config import ConfigError, load_config
+    config_path = tmp_path / "cuda.yaml"
+    _write_config(
+        config_path,
+        [
+            "mode: train",
+            "data:",
+            f"  pdb_path: {FIXTURE_PDB}",
+            "  window_size: 1",
+            "  horizon_size: 1",
+            "  stride: 1",
+            "model:",
+            "  hidden_dim: 8",
+            "  residue_layers: 2",
+            "  pair_layers: 2",
+            "  dropout: 0.0",
+            "training:",
+            "  epochs: 1",
+            "  learning_rate: 0.001",
+            "  consistency_weight: 0.0",
+            "  device: cuda",
+            "output:",
+            "  model_path: outputs/model.pt",
+        ],
+    )
+    with unittest.mock.patch("torch.cuda.is_available", return_value=False):
+        with pytest.raises(ConfigError) as exc_info:
+            load_config(config_path)
+    assert "CUDA is not available" in str(exc_info.value)
+
+
+def test_cuda_device_available_no_error(tmp_path: Path) -> None:
+    import unittest.mock
+    from allostery.config import load_config
+    config_path = tmp_path / "cuda_ok.yaml"
+    _write_config(
+        config_path,
+        [
+            "mode: train",
+            "data:",
+            f"  pdb_path: {FIXTURE_PDB}",
+            "  window_size: 1",
+            "  horizon_size: 1",
+            "  stride: 1",
+            "model:",
+            "  hidden_dim: 8",
+            "  residue_layers: 2",
+            "  pair_layers: 2",
+            "  dropout: 0.0",
+            "training:",
+            "  epochs: 1",
+            "  learning_rate: 0.001",
+            "  consistency_weight: 0.0",
+            "  device: cuda",
+            "output:",
+            "  model_path: outputs/model.pt",
+        ],
+    )
+    with unittest.mock.patch("torch.cuda.is_available", return_value=True):
+        load_config(config_path)  # must not raise

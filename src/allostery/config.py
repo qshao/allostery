@@ -320,6 +320,16 @@ def validate_config(config: AppConfig, config_file: str = "") -> None:
                 )
             if not config.training.device:
                 errors.append("training.device must not be empty")
+            if config.training.device.startswith('cuda'):
+                try:
+                    _torch = import_module('torch')
+                    if not _torch.cuda.is_available():
+                        errors.append(
+                            f"training.device is {config.training.device!r} but CUDA is not "
+                            f"available on this machine"
+                        )
+                except ImportError:
+                    pass  # torch not yet installed; skip check
             if config.training.batch_size <= 0:
                 errors.append(
                     f"training.batch_size must be > 0 (got {config.training.batch_size})"
