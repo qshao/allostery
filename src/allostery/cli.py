@@ -5,6 +5,7 @@ from dataclasses import asdict, is_dataclass
 from pathlib import Path
 from typing import Any, Sequence
 
+from allostery import __version__
 from allostery.config import AppConfig, load_config
 from allostery.io import write_pair_scores_csv
 from allostery.pipeline.analyze import run_network_analysis
@@ -16,11 +17,12 @@ from allostery.pipeline.score import load_scoring_model, score_trajectory
 from allostery.pipeline.train import TrainResult, train_model
 
 
-_SUBCOMMANDS = frozenset({'run', 'analyze'})
+_SUBCOMMANDS = frozenset({'run', 'analyze', 'check'})
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog='allostery')
+    parser.add_argument('--version', action='version', version=f'allostery {__version__}')
     subparsers = parser.add_subparsers(dest='command')
 
     # Default pipeline command (config YAML)
@@ -28,6 +30,10 @@ def build_parser() -> argparse.ArgumentParser:
     pipeline_parser.add_argument('config_path', help='Path to YAML config file')
 
     # Network analysis command
+    # Config validation dry-run
+    check_parser = subparsers.add_parser('check', help='Validate config without running the pipeline')
+    check_parser.add_argument('config_path', help='Path to YAML config file')
+
     analyze_parser = subparsers.add_parser('analyze', help='Analyze allosteric network from scores CSV')
     analyze_parser.add_argument('scores_csv', help='Path to scores CSV produced by a pipeline run')
     analyze_parser.add_argument('--top-k', type=int, default=20,
@@ -51,6 +57,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     if effective and effective[0] not in _SUBCOMMANDS and not effective[0].startswith('-'):
         effective = ['run'] + effective
     args = build_parser().parse_args(effective)
+
+    # Dispatch: subcommand 'check'
+    if args.command == 'check':
+        import sys as _sys2
+        try:
+            config = load_config(args.config_path)
+            print(f'Config OK: mode={config.mode}, family={config.model.family}')
+            return 0
+        except Exception as exc:
+            print(str(exc), file=_sys2.stderr)
+            return 1
 
     # Dispatch: subcommand 'analyze'
     if args.command == 'analyze':

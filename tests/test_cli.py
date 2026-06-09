@@ -54,6 +54,8 @@ def _ensure_yaml_module() -> None:
 
 _ensure_yaml_module()
 
+FIXTURE_PDB = (Path(__file__).resolve().parent / "fixtures" / "tiny_trajectory.pdb").resolve()
+
 
 def _write_config(path: Path, lines: list[str]) -> None:
     path.write_text("\n".join([*lines, ""]), encoding="utf-8")
@@ -333,3 +335,83 @@ def test_cli_influence_run_mode_writes_checkpoint_and_scores_csv(tmp_path: Path,
     captured = capsys.readouterr()
     assert "trained samples=1" in captured.out
     assert "completed mode=run" in captured.out
+
+
+def test_cli_version_flag(capsys) -> None:
+    import pytest
+    from allostery.cli import main
+    with pytest.raises(SystemExit) as exc_info:
+        main(["--version"])
+    assert exc_info.value.code == 0
+    captured = capsys.readouterr()
+    assert "allostery" in captured.out
+    assert "0.1.0" in captured.out
+
+
+def test_cli_check_valid_config(tmp_path: Path, capsys) -> None:
+    from allostery.cli import main
+    config_path = tmp_path / "check.yaml"
+    _write_config(
+        config_path,
+        [
+            "mode: run",
+            "data:",
+            f"  pdb_path: {FIXTURE_PDB}",
+            "  window_size: 1",
+            "  horizon_size: 1",
+            "  stride: 1",
+            "model:",
+            "  hidden_dim: 8",
+            "  residue_layers: 2",
+            "  pair_layers: 2",
+            "  dropout: 0.0",
+            "training:",
+            "  epochs: 1",
+            "  learning_rate: 0.001",
+            "  consistency_weight: 0.0",
+            "scoring:",
+            "  top_k: 5",
+            "output:",
+            "  model_path: outputs/model.pt",
+            "  score_csv_path: outputs/scores.csv",
+        ],
+    )
+    exit_code = main(["check", str(config_path)])
+    assert exit_code == 0
+    captured = capsys.readouterr()
+    assert "Config OK" in captured.out
+    assert "mode=run" in captured.out
+
+
+def test_cli_check_invalid_config_returns_nonzero(tmp_path: Path, capsys) -> None:
+    from allostery.cli import main
+    config_path = tmp_path / "bad.yaml"
+    _write_config(
+        config_path,
+        [
+            "mode: run",
+            "data:",
+            f"  pdb_path: {FIXTURE_PDB}",
+            "  window_size: 0",
+            "  horizon_size: 1",
+            "  stride: 1",
+            "model:",
+            "  hidden_dim: 8",
+            "  residue_layers: 2",
+            "  pair_layers: 2",
+            "  dropout: 0.0",
+            "training:",
+            "  epochs: 1",
+            "  learning_rate: 0.001",
+            "  consistency_weight: 0.0",
+            "scoring:",
+            "  top_k: 5",
+            "output:",
+            "  model_path: outputs/model.pt",
+            "  score_csv_path: outputs/scores.csv",
+        ],
+    )
+    exit_code = main(["check", str(config_path)])
+    assert exit_code == 1
+    captured = capsys.readouterr()
+    assert "window_size" in captured.err
