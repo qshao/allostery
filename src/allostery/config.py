@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 from dataclasses import dataclass
 from importlib import import_module
 from pathlib import Path
@@ -7,6 +8,10 @@ from typing import Any, Literal
 
 
 Mode = Literal['train', 'score', 'run']
+
+
+class ConfigError(ValueError):
+    pass
 
 
 @dataclass(frozen=True, slots=True)
@@ -20,6 +25,7 @@ class DataConfig:
     max_neighbors: int = 2
     min_sequence_separation: int = 0
     preprocess: str = 'none'
+    topology_path: Path | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -73,10 +79,13 @@ def load_config(path: str | Path) -> AppConfig:
     config_path = Path(path).resolve()
     raw = _load_yaml_mapping(config_path.read_text(encoding='utf-8'))
     base_dir = config_path.parent
+    config_filename = config_path.name
 
     mode = raw.get('mode')
     if mode not in {'train', 'score', 'run'}:
-        raise ValueError('mode must be one of train, score, or run')
+        raise ConfigError(
+            f"{config_filename}: mode must be one of train, score, or run (got {mode!r})"
+        )
 
     data_raw = _require_mapping(raw, 'data')
     model_raw = _require_mapping(raw, 'model')
@@ -119,6 +128,7 @@ def load_config(path: str | Path) -> AppConfig:
             max_neighbors=int(data_raw.get('max_neighbors', 2)),
             min_sequence_separation=int(data_raw.get('min_sequence_separation', 0)),
             preprocess=str(data_raw.get('preprocess', 'none')),
+            topology_path=_optional_path(base_dir, data_raw.get('topology_path')),
         ),
         model=ModelConfig(
             hidden_dim=int(_require_value(model_raw, 'hidden_dim')),
@@ -135,7 +145,7 @@ def load_config(path: str | Path) -> AppConfig:
             score_csv_path=_optional_path(base_dir, output_raw.get('score_csv_path')),
         ),
     )
-    validate_config(config)
+    validate_config(config, config_filename)
     return config
 
 
@@ -192,7 +202,7 @@ def _optional_path(base_dir: Path, value: object) -> Path | None:
     return _resolve_path(base_dir, value)
 
 
-def validate_config(config: AppConfig) -> None:
+def validate_config(config: AppConfig, config_file: str = "") -> None:
     if not config.data.pdb_path.exists():
         raise ValueError('pdb_path does not exist')
     if config.data.window_size <= 0:
@@ -260,6 +270,7 @@ def validate_config(config: AppConfig) -> None:
 
 __all__ = [
     'AppConfig',
+    'ConfigError',
     'DataConfig',
     'ModelConfig',
     'Mode',

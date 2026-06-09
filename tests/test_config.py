@@ -160,6 +160,11 @@ def test_load_config_parses_cri_model_fields(tmp_path: Path) -> None:
     assert config.training.no_edge_weight == 0.0
 
 
+def test_config_error_is_value_error_subclass() -> None:
+    from allostery.config import ConfigError
+    assert issubclass(ConfigError, ValueError)
+
+
 def test_load_config_rejects_invalid_mode(tmp_path: Path) -> None:
     config_path = tmp_path / "bad.yaml"
     _write_config(
