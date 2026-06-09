@@ -14,6 +14,21 @@ class ConfigError(ValueError):
     pass
 
 
+_DATA_KEYS: frozenset[str] = frozenset({
+    'pdb_path', 'window_size', 'horizon_size', 'stride', 'time_step',
+    'distance_cutoff', 'max_neighbors', 'min_sequence_separation', 'preprocess', 'topology_path',
+})
+_MODEL_KEYS: frozenset[str] = frozenset({
+    'family', 'hidden_dim', 'residue_layers', 'pair_layers', 'dropout', 'edge_types',
+})
+_TRAINING_KEYS: frozenset[str] = frozenset({
+    'epochs', 'learning_rate', 'consistency_weight', 'entropy_weight', 'no_edge_weight',
+    'sparsity_weight', 'validation_fraction', 'patience', 'seed', 'device', 'batch_size', 'verbose',
+})
+_SCORING_KEYS: frozenset[str] = frozenset({'top_k'})
+_OUTPUT_KEYS: frozenset[str] = frozenset({'model_path', 'score_csv_path'})
+
+
 @dataclass(frozen=True, slots=True)
 class DataConfig:
     pdb_path: Path
@@ -92,6 +107,14 @@ def load_config(path: str | Path) -> AppConfig:
     output_raw = _require_mapping(raw, 'output')
     training_raw = _require_optional_mapping(raw, 'training')
     scoring_raw = _require_optional_mapping(raw, 'scoring')
+
+    _warn_unknown_keys(data_raw, _DATA_KEYS, 'data', config_filename)
+    _warn_unknown_keys(model_raw, _MODEL_KEYS, 'model', config_filename)
+    if training_raw is not None:
+        _warn_unknown_keys(training_raw, _TRAINING_KEYS, 'training', config_filename)
+    if scoring_raw is not None:
+        _warn_unknown_keys(scoring_raw, _SCORING_KEYS, 'scoring', config_filename)
+    _warn_unknown_keys(output_raw, _OUTPUT_KEYS, 'output', config_filename)
 
     training = None
     if mode in {'train', 'run'}:
@@ -200,6 +223,21 @@ def _optional_path(base_dir: Path, value: object) -> Path | None:
     if value in {None, ''}:
         return None
     return _resolve_path(base_dir, value)
+
+
+def _warn_unknown_keys(
+    raw: dict[str, Any],
+    known: frozenset[str],
+    section: str,
+    config_file: str,
+) -> None:
+    prefix = f"{config_file}: " if config_file else ""
+    for key in raw:
+        if key not in known:
+            print(
+                f"warning: {prefix}{section}.{key} is not a recognized config key",
+                file=sys.stderr,
+            )
 
 
 def validate_config(config: AppConfig, config_file: str = "") -> None:

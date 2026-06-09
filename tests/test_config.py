@@ -266,6 +266,43 @@ def test_config_error_is_value_error_subclass() -> None:
     assert issubclass(ConfigError, ValueError)
 
 
+def test_unknown_key_in_training_prints_warning_to_stderr(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from allostery.config import load_config
+    config_path = tmp_path / "typo.yaml"
+    _write_config(
+        config_path,
+        [
+            "mode: run",
+            "data:",
+            f"  pdb_path: {FIXTURE_PDB}",
+            "  window_size: 1",
+            "  horizon_size: 1",
+            "  stride: 1",
+            "model:",
+            "  hidden_dim: 8",
+            "  residue_layers: 2",
+            "  pair_layers: 2",
+            "  dropout: 0.0",
+            "training:",
+            "  epochs: 1",
+            "  learnig_rate: 0.001",
+            "  learning_rate: 0.001",
+            "  consistency_weight: 0.25",
+            "scoring:",
+            "  top_k: 5",
+            "output:",
+            "  model_path: outputs/model.pt",
+            "  score_csv_path: outputs/scores.csv",
+        ],
+    )
+    load_config(config_path)
+    captured = capsys.readouterr()
+    assert "learnig_rate" in captured.err
+    assert "warning" in captured.err.lower()
+
+
 def test_load_config_rejects_invalid_mode(tmp_path: Path) -> None:
     config_path = tmp_path / "bad.yaml"
     _write_config(
