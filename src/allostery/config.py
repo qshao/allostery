@@ -245,6 +245,11 @@ def validate_config(config: AppConfig, config_file: str = "") -> None:
 
     if not config.data.pdb_path.exists():
         errors.append(f"data.pdb_path does not exist (got {config.data.pdb_path!r})")
+    if (config.data.topology_path is not None
+            and not config.data.topology_path.exists()):
+        errors.append(
+            f"data.topology_path: file not found: {config.data.topology_path}"
+        )
     if config.data.window_size <= 0:
         errors.append(f"data.window_size must be > 0 (got {config.data.window_size})")
     if config.data.horizon_size <= 0:

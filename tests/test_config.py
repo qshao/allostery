@@ -333,3 +333,39 @@ def test_load_config_rejects_invalid_mode(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="mode"):
         load_config(config_path)
+
+
+def test_missing_topology_path_raises_config_error(tmp_path: Path) -> None:
+    from allostery.config import ConfigError, load_config
+    config_path = tmp_path / "topo.yaml"
+    missing_topo = tmp_path / "does_not_exist.prmtop"
+    _write_config(
+        config_path,
+        [
+            "mode: run",
+            "data:",
+            f"  pdb_path: {FIXTURE_PDB}",
+            f"  topology_path: {missing_topo}",
+            "  window_size: 1",
+            "  horizon_size: 1",
+            "  stride: 1",
+            "model:",
+            "  hidden_dim: 8",
+            "  residue_layers: 2",
+            "  pair_layers: 2",
+            "  dropout: 0.0",
+            "training:",
+            "  epochs: 1",
+            "  learning_rate: 0.001",
+            "  consistency_weight: 0.0",
+            "scoring:",
+            "  top_k: 5",
+            "output:",
+            "  model_path: outputs/model.pt",
+            "  score_csv_path: outputs/scores.csv",
+        ],
+    )
+    with pytest.raises(ConfigError) as exc_info:
+        load_config(config_path)
+    assert "topology_path" in str(exc_info.value)
+    assert str(missing_topo) in str(exc_info.value)
