@@ -51,6 +51,18 @@ def read_scores_csv(path: str | Path) -> list[dict[str, str]]:
     missing = required - rows[0].keys()
     if missing:
         raise ValueError(f"Scores CSV is missing required columns: {sorted(missing)}")
+    for row_num, row in enumerate(rows, start=2):  # row 1 is the header
+        for col in required:
+            if not row.get(col, "").strip():
+                raise ValueError(
+                    f"Row {row_num}: missing or empty value for column {col!r}"
+                )
+        try:
+            float(row["score"])
+        except (ValueError, TypeError):
+            raise ValueError(
+                f"Row {row_num}: 'score' must be a number, got {row['score']!r}"
+            )
     return rows
 
 
@@ -72,6 +84,7 @@ def build_graph(rows: list[dict[str, str]], top_k: int = 20) -> AllostericNetwor
 
     node_labels = list(node_set.keys())
     adjacency: dict[int, list[tuple[int, float]]] = defaultdict(list)
+    seen_pairs: set[tuple[int, int]] = set()
 
     for row in selected:
         label_i = _residue_label(row["residue_i_chain"], row["residue_i_number"],
@@ -80,6 +93,10 @@ def build_graph(rows: list[dict[str, str]], top_k: int = 20) -> AllostericNetwor
                                   row["residue_j_name"])
         idx_i = node_set[label_i]
         idx_j = node_set[label_j]
+        pair = (min(idx_i, idx_j), max(idx_i, idx_j))
+        if pair in seen_pairs:
+            continue
+        seen_pairs.add(pair)
         score = float(row["score"])
         adjacency[idx_i].append((idx_j, score))
         adjacency[idx_j].append((idx_i, score))
@@ -129,25 +146,6 @@ def dijkstra(net: AllostericNetwork, source: int) -> tuple[dict[int, float], dic
                 heapq.heappush(heap, (nd, v))
 
     return dist, prev
-
-
-def _reconstruct_path(prev: dict[int, int | None], target: int) -> list[int] | None:
-    path: list[int] = []
-    current: int | None = target
-    while current is not None:
-        path.append(current)
-        current = prev.get(current)
-    path.reverse()
-    if not path or path[0] != _find_source(prev):
-        return None
-    return path
-
-
-def _find_source(prev: dict[int, int | None]) -> int:
-    for node, parent in prev.items():
-        if parent is None:
-            return node
-    return next(iter(prev))
 
 
 def shortest_paths(

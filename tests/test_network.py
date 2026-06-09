@@ -300,3 +300,56 @@ def test_cli_analyze_with_source_sink(tmp_path: Path) -> None:
     _write_scores_csv(csv_path, _simple_rows())
     ret = main(["analyze", str(csv_path), "--top-k", "2", "--source", "A:1 GLY", "--sink", "A:3 SER"])
     assert ret == 0
+
+
+# ---------------------------------------------------------------------------
+# read_scores_csv data-row validation
+# ---------------------------------------------------------------------------
+
+def test_read_scores_csv_empty_score_raises(tmp_path: Path) -> None:
+    csv_path = tmp_path / "bad.csv"
+    rows = [
+        {
+            "score": "",
+            "residue_i_chain": "A", "residue_i_number": "1", "residue_i_name": "GLY",
+            "residue_j_chain": "A", "residue_j_number": "2", "residue_j_name": "ALA",
+        }
+    ]
+    _write_scores_csv(csv_path, rows)
+    with pytest.raises(ValueError) as exc_info:
+        read_scores_csv(csv_path)
+    assert "Row 2" in str(exc_info.value)
+    assert "score" in str(exc_info.value)
+
+
+def test_read_scores_csv_non_numeric_score_raises(tmp_path: Path) -> None:
+    csv_path = tmp_path / "bad.csv"
+    rows = [
+        {
+            "score": "abc",
+            "residue_i_chain": "A", "residue_i_number": "1", "residue_i_name": "GLY",
+            "residue_j_chain": "A", "residue_j_number": "2", "residue_j_name": "ALA",
+        }
+    ]
+    _write_scores_csv(csv_path, rows)
+    with pytest.raises(ValueError) as exc_info:
+        read_scores_csv(csv_path)
+    assert "Row 2" in str(exc_info.value)
+    assert "must be a number" in str(exc_info.value)
+
+
+def test_read_scores_csv_empty_chain_raises(tmp_path: Path) -> None:
+    csv_path = tmp_path / "bad.csv"
+    rows = [
+        {
+            "score": "0.9",
+            "residue_i_chain": "",
+            "residue_i_number": "1", "residue_i_name": "GLY",
+            "residue_j_chain": "A", "residue_j_number": "2", "residue_j_name": "ALA",
+        }
+    ]
+    _write_scores_csv(csv_path, rows)
+    with pytest.raises(ValueError) as exc_info:
+        read_scores_csv(csv_path)
+    assert "Row 2" in str(exc_info.value)
+    assert "residue_i_chain" in str(exc_info.value)
