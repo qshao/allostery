@@ -203,69 +203,99 @@ def _optional_path(base_dir: Path, value: object) -> Path | None:
 
 
 def validate_config(config: AppConfig, config_file: str = "") -> None:
+    errors: list[str] = []
+
     if not config.data.pdb_path.exists():
-        raise ValueError('pdb_path does not exist')
+        errors.append(f"data.pdb_path does not exist (got {config.data.pdb_path!r})")
     if config.data.window_size <= 0:
-        raise ValueError('window_size must be greater than zero')
+        errors.append(f"data.window_size must be > 0 (got {config.data.window_size})")
     if config.data.horizon_size <= 0:
-        raise ValueError('horizon_size must be greater than zero')
+        errors.append(f"data.horizon_size must be > 0 (got {config.data.horizon_size})")
     if config.data.stride <= 0:
-        raise ValueError('stride must be greater than zero')
+        errors.append(f"data.stride must be > 0 (got {config.data.stride})")
     if config.data.time_step <= 0:
-        raise ValueError('time_step must be greater than zero')
+        errors.append(f"data.time_step must be > 0 (got {config.data.time_step})")
     if config.data.distance_cutoff <= 0:
-        raise ValueError('distance_cutoff must be greater than zero')
+        errors.append(f"data.distance_cutoff must be > 0 (got {config.data.distance_cutoff})")
     if config.data.max_neighbors <= 0:
-        raise ValueError('max_neighbors must be greater than zero')
+        errors.append(f"data.max_neighbors must be > 0 (got {config.data.max_neighbors})")
     if config.data.min_sequence_separation < 0:
-        raise ValueError('min_sequence_separation must be greater than or equal to zero')
+        errors.append(
+            f"data.min_sequence_separation must be >= 0 (got {config.data.min_sequence_separation})"
+        )
     if config.data.preprocess not in {'none', 'center', 'align'}:
-        raise ValueError('preprocess must be one of none, center, or align')
+        errors.append(
+            f"data.preprocess must be one of none, center, or align (got {config.data.preprocess!r})"
+        )
     if config.model.hidden_dim <= 0:
-        raise ValueError('hidden_dim must be greater than zero')
+        errors.append(f"model.hidden_dim must be > 0 (got {config.model.hidden_dim})")
     if config.model.residue_layers <= 0:
-        raise ValueError('residue_layers must be greater than zero')
+        errors.append(f"model.residue_layers must be > 0 (got {config.model.residue_layers})")
     if config.model.pair_layers <= 0:
-        raise ValueError('pair_layers must be greater than zero')
+        errors.append(f"model.pair_layers must be > 0 (got {config.model.pair_layers})")
     if config.model.family not in {'relational', 'cri', 'influence'}:
-        raise ValueError('family must be one of relational, cri, or influence')
+        errors.append(
+            f"model.family must be one of relational, cri, or influence (got {config.model.family!r})"
+        )
     if config.model.family == 'cri':
         if config.model.edge_types is None:
-            raise ValueError('edge_types is required for cri model family')
-        if config.model.edge_types < 2:
-            raise ValueError('edge_types must be at least 2')
+            errors.append("model.edge_types is required for cri model family")
+        elif config.model.edge_types < 2:
+            errors.append(f"model.edge_types must be >= 2 (got {config.model.edge_types})")
     if not 0.0 <= config.model.dropout < 1.0:
-        raise ValueError('dropout must be greater than or equal to zero and less than one')
+        errors.append(f"model.dropout must be >= 0.0 and < 1.0 (got {config.model.dropout})")
     if config.mode in {'train', 'run'}:
         if config.training is None:
-            raise ValueError(f'training section is required for {config.mode} mode')
-        if config.training.epochs <= 0:
-            raise ValueError('epochs must be greater than zero')
-        if config.training.learning_rate <= 0:
-            raise ValueError('learning_rate must be greater than zero')
-        if config.training.entropy_weight < 0:
-            raise ValueError('entropy_weight must be greater than or equal to zero')
-        if config.training.no_edge_weight < 0:
-            raise ValueError('no_edge_weight must be greater than or equal to zero')
-        if config.training.sparsity_weight < 0:
-            raise ValueError('sparsity_weight must be greater than or equal to zero')
-        if not 0.0 <= config.training.validation_fraction < 1.0:
-            raise ValueError('validation_fraction must be greater than or equal to zero and less than one')
-        if config.training.patience < 0:
-            raise ValueError('patience must be greater than or equal to zero')
-        if not config.training.device:
-            raise ValueError('device must not be empty')
-        if config.training.batch_size <= 0:
-            raise ValueError('batch_size must be greater than zero')
+            errors.append(f"training section is required for {config.mode} mode")
+        else:
+            if config.training.epochs <= 0:
+                errors.append(f"training.epochs must be > 0 (got {config.training.epochs})")
+            if config.training.learning_rate <= 0:
+                errors.append(
+                    f"training.learning_rate must be > 0 (got {config.training.learning_rate})"
+                )
+            if config.training.entropy_weight < 0:
+                errors.append(
+                    f"training.entropy_weight must be >= 0 (got {config.training.entropy_weight})"
+                )
+            if config.training.no_edge_weight < 0:
+                errors.append(
+                    f"training.no_edge_weight must be >= 0 (got {config.training.no_edge_weight})"
+                )
+            if config.training.sparsity_weight < 0:
+                errors.append(
+                    f"training.sparsity_weight must be >= 0 (got {config.training.sparsity_weight})"
+                )
+            if not 0.0 <= config.training.validation_fraction < 1.0:
+                errors.append(
+                    f"training.validation_fraction must be >= 0.0 and < 1.0"
+                    f" (got {config.training.validation_fraction})"
+                )
+            if config.training.patience < 0:
+                errors.append(
+                    f"training.patience must be >= 0 (got {config.training.patience})"
+                )
+            if not config.training.device:
+                errors.append("training.device must not be empty")
+            if config.training.batch_size <= 0:
+                errors.append(
+                    f"training.batch_size must be > 0 (got {config.training.batch_size})"
+                )
     if config.mode in {'score', 'run'}:
         if config.scoring is None:
-            raise ValueError(f'scoring section is required for {config.mode} mode')
-        if config.scoring.top_k <= 0:
-            raise ValueError('top_k must be greater than zero')
+            errors.append(f"scoring section is required for {config.mode} mode")
+        else:
+            if config.scoring.top_k <= 0:
+                errors.append(f"scoring.top_k must be > 0 (got {config.scoring.top_k})")
     if config.mode in {'train', 'score', 'run'} and config.output.model_path is None:
-        raise ValueError('model_path is required')
+        errors.append("output.model_path is required")
     if config.mode in {'score', 'run'} and config.output.score_csv_path is None:
-        raise ValueError('score_csv_path is required')
+        errors.append("output.score_csv_path is required")
+
+    if errors:
+        joined = "\n  ".join(errors)
+        prefix = f"{config_file}:\n  " if config_file else ""
+        raise ConfigError(f"{prefix}{joined}")
 
 
 __all__ = [

@@ -160,6 +160,107 @@ def test_load_config_parses_cri_model_fields(tmp_path: Path) -> None:
     assert config.training.no_edge_weight == 0.0
 
 
+def test_config_error_message_includes_filename(tmp_path: Path) -> None:
+    from allostery.config import load_config
+    bad_config = tmp_path / "bad.yaml"
+    _write_config(
+        bad_config,
+        [
+            "mode: run",
+            "data:",
+            f"  pdb_path: {FIXTURE_PDB}",
+            "  window_size: 0",
+            "  horizon_size: 1",
+            "  stride: 1",
+            "model:",
+            "  hidden_dim: 8",
+            "  residue_layers: 2",
+            "  pair_layers: 2",
+            "  dropout: 0.0",
+            "training:",
+            "  epochs: 1",
+            "  learning_rate: 0.001",
+            "  consistency_weight: 0.25",
+            "scoring:",
+            "  top_k: 5",
+            "output:",
+            "  model_path: outputs/model.pt",
+            "  score_csv_path: outputs/scores.csv",
+        ],
+    )
+    with pytest.raises(ValueError) as exc_info:
+        load_config(bad_config)
+    assert "bad.yaml" in str(exc_info.value)
+
+
+def test_config_error_includes_got_value(tmp_path: Path) -> None:
+    from allostery.config import load_config
+    bad_config = tmp_path / "got.yaml"
+    _write_config(
+        bad_config,
+        [
+            "mode: run",
+            "data:",
+            f"  pdb_path: {FIXTURE_PDB}",
+            "  window_size: 0",
+            "  horizon_size: 1",
+            "  stride: 1",
+            "model:",
+            "  hidden_dim: 8",
+            "  residue_layers: 2",
+            "  pair_layers: 2",
+            "  dropout: 0.0",
+            "training:",
+            "  epochs: 1",
+            "  learning_rate: 0.001",
+            "  consistency_weight: 0.25",
+            "scoring:",
+            "  top_k: 5",
+            "output:",
+            "  model_path: outputs/model.pt",
+            "  score_csv_path: outputs/scores.csv",
+        ],
+    )
+    with pytest.raises(ValueError) as exc_info:
+        load_config(bad_config)
+    assert "got 0" in str(exc_info.value)
+
+
+def test_config_error_reports_multiple_errors_at_once(tmp_path: Path) -> None:
+    from allostery.config import load_config
+    bad_config = tmp_path / "multi.yaml"
+    _write_config(
+        bad_config,
+        [
+            "mode: run",
+            "data:",
+            f"  pdb_path: {FIXTURE_PDB}",
+            "  window_size: 0",
+            "  horizon_size: 0",
+            "  stride: 1",
+            "model:",
+            "  hidden_dim: 8",
+            "  residue_layers: 2",
+            "  pair_layers: 2",
+            "  dropout: 0.0",
+            "training:",
+            "  epochs: 1",
+            "  learning_rate: 0.001",
+            "  consistency_weight: 0.25",
+            "scoring:",
+            "  top_k: 5",
+            "output:",
+            "  model_path: outputs/model.pt",
+            "  score_csv_path: outputs/scores.csv",
+        ],
+    )
+    with pytest.raises(ValueError) as exc_info:
+        load_config(bad_config)
+    msg = str(exc_info.value)
+    assert "window_size" in msg
+    assert "horizon_size" in msg
+
+
 def test_config_error_is_value_error_subclass() -> None:
     from allostery.config import ConfigError
     assert issubclass(ConfigError, ValueError)
