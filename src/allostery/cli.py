@@ -7,6 +7,7 @@ from typing import Any, Sequence
 
 from allostery.config import AppConfig, load_config
 from allostery.io import write_pair_scores_csv
+from allostery.pipeline.analyze import run_network_analysis
 from allostery.pipeline.cri_score import score_cri_trajectory
 from allostery.pipeline.cri_train import train_cri_model
 from allostery.pipeline.influence_score import score_influence_trajectory
@@ -15,15 +16,62 @@ from allostery.pipeline.score import load_scoring_model, score_trajectory
 from allostery.pipeline.train import TrainResult, train_model
 
 
+_SUBCOMMANDS = frozenset({'run', 'analyze'})
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog='allostery')
-    parser.add_argument('config_path')
+    subparsers = parser.add_subparsers(dest='command')
+
+    # Default pipeline command (config YAML)
+    pipeline_parser = subparsers.add_parser('run', help='Run training/scoring pipeline from config YAML')
+    pipeline_parser.add_argument('config_path', help='Path to YAML config file')
+
+    # Network analysis command
+    analyze_parser = subparsers.add_parser('analyze', help='Analyze allosteric network from scores CSV')
+    analyze_parser.add_argument('scores_csv', help='Path to scores CSV produced by a pipeline run')
+    analyze_parser.add_argument('--top-k', type=int, default=20,
+                                help='Number of top-scoring pairs to include as graph edges (default 20)')
+    analyze_parser.add_argument('--source', default=None,
+                                help='Source residue for channel analysis, e.g. "A:12 GLY"')
+    analyze_parser.add_argument('--sink', default=None,
+                                help='Sink residue for channel analysis, e.g. "A:87 SER"')
+    analyze_parser.add_argument('--top-paths', type=int, default=5,
+                                help='Number of shortest paths to report (default 5)')
+    analyze_parser.add_argument('--top-hubs', type=int, default=10,
+                                help='Number of hub residues to report (default 10)')
+
     return parser
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
-    config = load_config(args.config_path)
+    import sys as _sys
+    effective: list[str] = list(argv) if argv is not None else _sys.argv[1:]
+    # Legacy: bare config_path with no subcommand prefix → treat as 'run config_path'
+    if effective and effective[0] not in _SUBCOMMANDS and not effective[0].startswith('-'):
+        effective = ['run'] + effective
+    args = build_parser().parse_args(effective)
+
+    # Dispatch: subcommand 'analyze'
+    if args.command == 'analyze':
+        report = run_network_analysis(
+            scores_csv=args.scores_csv,
+            top_k=args.top_k,
+            source=args.source,
+            sink=args.sink,
+            top_paths=args.top_paths,
+            top_hubs=args.top_hubs,
+        )
+        print(report)
+        return 0
+
+    # Dispatch: subcommand 'run'
+    config_path = getattr(args, 'config_path', None)
+    if config_path is None:
+        build_parser().print_help()
+        return 1
+
+    config = load_config(config_path)
 
     if config.mode == 'train':
         _run_train(config)
@@ -63,6 +111,7 @@ def _run_train(config: AppConfig) -> TrainResult:
             verbose=training.verbose,
             checkpoint_path=model_path,
             config_snapshot=_serialize_config(config),
+            topology_path=config.data.topology_path,
         )
         print(f'trained samples={inf_result.num_samples} checkpoint={model_path}')
         return inf_result  # type: ignore[return-value]
