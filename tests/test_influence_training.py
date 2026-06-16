@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import warnings
 from pathlib import Path
 
 import pytest
@@ -109,3 +110,18 @@ def test_train_influence_model_saves_checkpoint(fixture_path: Path, tmp_path: Pa
     ckpt = load_checkpoint(checkpoint_path)
     assert ckpt.model_family == 'influence'
     assert ckpt.residue_layers == 1
+
+
+def test_mixed_precision_on_cpu_warns_and_runs(fixture_path) -> None:
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter('always')
+        result = train_influence_model(
+            pdb_path=fixture_path / 'tiny_trajectory.pdb',
+            window_size=3, stride=1, time_step=1.0,
+            hidden_dim=8, num_encoder_layers=1, dropout=0.0,
+            epochs=1, learning_rate=1e-3, sparsity_weight=0.0,
+            validation_fraction=0.0, patience=0, seed=0, device='cpu',
+            batch_size=1, mixed_precision=True,
+        )
+    assert result.num_samples > 0
+    assert any('mixed_precision' in str(w.message) for w in caught)

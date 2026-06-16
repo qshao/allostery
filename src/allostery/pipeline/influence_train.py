@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import warnings
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping
@@ -74,6 +75,7 @@ def train_influence_model(
     device: str = 'cpu',
     batch_size: int = 4,
     grad_clip_norm: float | None = 1.0,
+    mixed_precision: bool = False,
     verbose: bool = True,
     checkpoint_path: str | Path | None = None,
     config_snapshot: Mapping[str, Any] | None = None,
@@ -81,6 +83,10 @@ def train_influence_model(
 ) -> InfluenceTrainResult:
     seed_everything(seed)
     torch_device = resolve_device(device)
+    use_amp = mixed_precision and torch_device.type == 'cuda'
+    if mixed_precision and not use_amp:
+        warnings.warn('mixed_precision requested but device is not CUDA; running in full precision')
+    scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
     trajectory = load_trajectory(Path(pdb_path), topology_path=topology_path)
     samples = build_influence_samples(
         trajectory.coordinates,
@@ -118,17 +124,20 @@ def train_influence_model(
         epoch_batch_count = 0
         for batch_samples in iter_batches(train_samples, batch_size):
             batch = stack_influence_batch(batch_samples, torch_device)
-            output = model(batch.state_features)
-            losses = influence_loss(output, batch.acceleration_targets, sparsity_weight=sparsity_weight)
+            optimizer.zero_grad()
+            with torch.autocast(device_type=torch_device.type, enabled=use_amp):
+                output = model(batch.state_features)
+                losses = influence_loss(output, batch.acceleration_targets, sparsity_weight=sparsity_weight)
             if not torch.isfinite(losses.total):
                 raise ValueError(
                     f'non-finite training loss at epoch {epoch + 1}, batch {epoch_batch_count + 1}'
                 )
-            optimizer.zero_grad()
-            losses.total.backward()
+            scaler.scale(losses.total).backward()
             if grad_clip_norm is not None:
+                scaler.unscale_(optimizer)
                 torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip_norm)
-            optimizer.step()
+            scaler.step(optimizer)
+            scaler.update()
             last_loss = float(losses.total.detach().item())
             epoch_loss_sum += last_loss
             epoch_batch_count += 1
