@@ -72,6 +72,13 @@ class AllostericInfluenceModel(nn.Module):
             raise ValueError('state_features must have shape (batch, time, N, state_dim)')
         batch_size, num_steps, num_residues, _ = state_features.shape
 
+        if num_residues < 2:
+            baseline = self.baseline_net(state_features)  # [batch, time, N, 3]
+            influence_matrix = torch.zeros(
+                batch_size, num_residues, num_residues, device=state_features.device
+            )
+            return {'acceleration': baseline, 'influence_matrix': influence_matrix}
+
         # Temporal mean state used to compute influence topology
         mean_state = state_features.mean(dim=1)  # [batch, N, state_dim]
         encoded = self.encoder(mean_state)         # [batch, N, hidden_dim]

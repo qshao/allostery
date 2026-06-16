@@ -60,3 +60,13 @@ def test_influence_model_single_residue_pair() -> None:
 def test_influence_model_rejects_nonpositive_encoder_layers() -> None:
     with pytest.raises(ValueError, match='num_encoder_layers'):
         AllostericInfluenceModel(state_dim=6, hidden_dim=8, num_encoder_layers=0)
+
+
+def test_forward_single_residue_is_finite() -> None:
+    model = AllostericInfluenceModel(state_dim=6, hidden_dim=8, num_encoder_layers=1)
+    state = torch.randn(2, 4, 1, 6)  # batch=2, time=4, N=1, state_dim=6
+    out = model(state)
+    assert out['acceleration'].shape == (2, 4, 1, 3)
+    assert out['influence_matrix'].shape == (2, 1, 1)
+    assert torch.isfinite(out['acceleration']).all()
+    assert torch.isfinite(out['influence_matrix']).all()
