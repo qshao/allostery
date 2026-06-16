@@ -24,6 +24,7 @@ def build_residue_dynamics(
     time_step: float = 1.0,
     preprocess: str = "none",
     reference_frame_index: int = 0,
+    normalize: bool = False,
 ) -> ResidueDynamics:
     if time_step <= 0.0:
         raise ValueError("time_step must be greater than zero")
@@ -42,6 +43,8 @@ def build_residue_dynamics(
         raise ValueError("preprocess must be one of none, center, or align")
 
     positions = coordinates[1:-1]
+    if normalize:
+        positions = positions - positions.mean(axis=1, keepdims=True)
     velocities = (coordinates[2:] - coordinates[:-2]) / (2.0 * time_step)
     accelerations = (coordinates[2:] - (2.0 * coordinates[1:-1]) + coordinates[:-2]) / (time_step * time_step)
     return ResidueDynamics(

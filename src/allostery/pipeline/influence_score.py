@@ -50,6 +50,7 @@ def score_influence_trajectory(
         stride=stride,
         time_step=time_step,
         preprocess=preprocess,
+        normalize=normalize,
     )
     if not samples:
         raise ValueError('trajectory did not yield any influence scoring windows')

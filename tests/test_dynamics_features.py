@@ -61,3 +61,21 @@ def test_build_residue_dynamics_rejects_nonfinite_coordinates() -> None:
 def test_build_residue_dynamics_rejects_nonpositive_time_step() -> None:
     with pytest.raises(ValueError, match="time_step"):
         build_residue_dynamics(np.zeros((3, 2, 3), dtype=np.float32), time_step=0.0)
+
+
+def test_normalize_makes_positions_translation_invariant() -> None:
+    rng = np.random.default_rng(0)
+    coords = rng.standard_normal((4, 6, 3)).astype(np.float32)
+    shifted = coords + np.array([10.0, -5.0, 3.0], dtype=np.float32)
+    base = build_residue_dynamics(coords, normalize=True)
+    moved = build_residue_dynamics(shifted, normalize=True)
+    np.testing.assert_allclose(base.positions, moved.positions, atol=1e-4)
+
+
+def test_normalize_false_keeps_absolute_positions() -> None:
+    rng = np.random.default_rng(1)
+    coords = rng.standard_normal((4, 6, 3)).astype(np.float32)
+    shifted = coords + 10.0
+    base = build_residue_dynamics(coords, normalize=False)
+    moved = build_residue_dynamics(shifted, normalize=False)
+    assert not np.allclose(base.positions, moved.positions, atol=1e-4)

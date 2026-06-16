@@ -20,6 +20,7 @@ def build_influence_samples(
     stride: int,
     time_step: float = 1.0,
     preprocess: str = 'none',
+    normalize: bool = False,
 ) -> list[InfluenceSample]:
     trajectory = _validate_coordinate_window(coordinates)
     if window_size < 3:
@@ -32,7 +33,7 @@ def build_influence_samples(
     samples: list[InfluenceSample] = []
     for start in range(0, trajectory.shape[0] - window_size + 1, stride):
         window = trajectory[start : start + window_size]
-        dynamics = build_residue_dynamics(window, time_step=time_step, preprocess=preprocess)
+        dynamics = build_residue_dynamics(window, time_step=time_step, preprocess=preprocess, normalize=normalize)
         samples.append(
             InfluenceSample(
                 state_features=dynamics.state_features,

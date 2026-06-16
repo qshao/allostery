@@ -76,6 +76,7 @@ def train_influence_model(
     batch_size: int = 4,
     grad_clip_norm: float | None = 1.0,
     mixed_precision: bool = False,
+    normalize: bool = True,
     verbose: bool = True,
     checkpoint_path: str | Path | None = None,
     config_snapshot: Mapping[str, Any] | None = None,
@@ -97,6 +98,7 @@ def train_influence_model(
         stride=stride,
         time_step=time_step,
         preprocess=preprocess,
+        normalize=normalize,
     )
     if not samples:
         raise ValueError('trajectory did not yield any influence training windows')
