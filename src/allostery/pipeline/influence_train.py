@@ -77,6 +77,7 @@ def train_influence_model(
     grad_clip_norm: float | None = 1.0,
     mixed_precision: bool = False,
     normalize: bool = True,
+    lr_scheduler: str = 'plateau',
     verbose: bool = True,
     checkpoint_path: str | Path | None = None,
     config_snapshot: Mapping[str, Any] | None = None,
@@ -115,6 +116,12 @@ def train_influence_model(
         dropout=dropout,
     ).to(torch_device)
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+
+    if lr_scheduler not in {'none', 'plateau'}:
+        raise ValueError(f"lr_scheduler must be one of none, plateau (got {lr_scheduler!r})")
+    scheduler = None
+    if lr_scheduler == 'plateau':
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min')
 
     best_state = copy.deepcopy(model.state_dict())
     best_validation_loss: float | None = None
@@ -157,6 +164,8 @@ def train_influence_model(
                 sparsity_weight=sparsity_weight,
                 batch_size=batch_size,
             )
+            if scheduler is not None:
+                scheduler.step(validation_loss)
             is_best = best_validation_loss is None or validation_loss < best_validation_loss
             if is_best:
                 best_validation_loss = validation_loss

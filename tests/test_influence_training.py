@@ -125,3 +125,27 @@ def test_mixed_precision_on_cpu_warns_and_runs(fixture_path) -> None:
         )
     assert result.num_samples > 0
     assert any('mixed_precision' in str(w.message) for w in caught)
+
+
+def test_invalid_lr_scheduler_rejected(fixture_path) -> None:
+    with pytest.raises(ValueError, match='lr_scheduler'):
+        train_influence_model(
+            pdb_path=fixture_path / 'tiny_trajectory.pdb',
+            window_size=3, stride=1, time_step=1.0,
+            hidden_dim=8, num_encoder_layers=1, dropout=0.0,
+            epochs=1, learning_rate=1e-3, sparsity_weight=0.0,
+            validation_fraction=0.0, patience=0, seed=0, device='cpu',
+            batch_size=1, lr_scheduler='bogus',
+        )
+
+
+def test_plateau_scheduler_runs_with_validation(fixture_path) -> None:
+    result = train_influence_model(
+        pdb_path=fixture_path / 'tiny_trajectory.pdb',
+        window_size=3, stride=1, time_step=1.0,
+        hidden_dim=8, num_encoder_layers=1, dropout=0.0,
+        epochs=2, learning_rate=1e-3, sparsity_weight=0.0,
+        validation_fraction=0.5, patience=0, seed=0, device='cpu',
+        batch_size=1, lr_scheduler='plateau',
+    )
+    assert result.num_samples > 0
