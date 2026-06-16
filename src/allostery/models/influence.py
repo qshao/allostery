@@ -32,14 +32,20 @@ class AllostericInfluenceModel(nn.Module):
         num_encoder_layers: int = 2,
         dropout: float = 0.0,
         residue_chunk_size: int | None = None,
+        min_sequence_separation: int = 1,
     ) -> None:
         super().__init__()
         if num_encoder_layers <= 0:
             raise ValueError('num_encoder_layers must be greater than zero')
         if residue_chunk_size is not None and residue_chunk_size <= 0:
             raise ValueError('residue_chunk_size must be greater than zero')
+        if min_sequence_separation < 1:
+            raise ValueError(
+                'min_sequence_separation must be at least 1 (diagonal must always be masked)'
+            )
         self.hidden_dim = hidden_dim
         self.residue_chunk_size = residue_chunk_size
+        self.min_sequence_separation = min_sequence_separation
         # Encode time-averaged state to compute stable Q and K
         self.encoder = _build_mlp(state_dim, hidden_dim, num_encoder_layers, dropout)
         # Q[j]: what kind of influence does j receive?
@@ -94,9 +100,16 @@ class AllostericInfluenceModel(nn.Module):
         scale = float(self.hidden_dim) ** -0.5
         attn_logits = torch.bmm(Q, K.transpose(1, 2)) * scale  # [batch, N, N]
 
-        # Exclude self-influence so each residue only receives cross-residue signals
-        diag_mask = torch.eye(num_residues, dtype=torch.bool, device=state_features.device)
-        attn_logits = attn_logits.masked_fill(diag_mask.unsqueeze(0), float('-inf'))
+        # Mask pairs within min_sequence_separation (always includes diagonal)
+        if self.min_sequence_separation >= num_residues:
+            raise ValueError(
+                f'min_sequence_separation={self.min_sequence_separation} leaves no valid pairs '
+                f'for a protein of {num_residues} residues. '
+                f'Use a value less than {num_residues}.'
+            )
+        indices = torch.arange(num_residues, device=state_features.device)
+        sep_mask = (indices.unsqueeze(0) - indices.unsqueeze(1)).abs() < self.min_sequence_separation
+        attn_logits = attn_logits.masked_fill(sep_mask.unsqueeze(0), float('-inf'))
 
         # influence_matrix[b, j, i] = softmax over i → directed allosteric influence
         influence_matrix = torch.softmax(attn_logits, dim=-1)  # [batch, N, N]

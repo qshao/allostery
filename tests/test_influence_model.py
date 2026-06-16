@@ -87,3 +87,67 @@ def test_chunked_aggregation_matches_dense() -> None:
         b = chunked(state)
     torch.testing.assert_close(a['acceleration'], b['acceleration'], atol=1e-6, rtol=1e-5)
     torch.testing.assert_close(a['influence_matrix'], b['influence_matrix'], atol=1e-6, rtol=1e-5)
+
+
+def test_influence_model_masks_pairs_within_sequence_separation() -> None:
+    model = AllostericInfluenceModel(
+        state_dim=6, hidden_dim=8, num_encoder_layers=1, min_sequence_separation=3
+    )
+    state_features = torch.randn(1, 3, 8, 6)  # 8 residues
+
+    output = model(state_features)
+    A = output['influence_matrix'].squeeze(0)  # [8, 8]
+
+    for i in range(8):
+        for j in range(8):
+            if abs(i - j) < 3:
+                assert A[i, j].item() == pytest.approx(0.0, abs=1e-6), (
+                    f'A[{i},{j}] = {A[i,j].item():.6f} should be 0 '
+                    f'(sequence separation {abs(i-j)} < 3)'
+                )
+
+
+def test_influence_model_rows_still_sum_to_one_with_separation() -> None:
+    model = AllostericInfluenceModel(
+        state_dim=6, hidden_dim=8, num_encoder_layers=1, min_sequence_separation=3
+    )
+    state_features = torch.randn(1, 3, 8, 6)
+
+    output = model(state_features)
+    A = output['influence_matrix'].squeeze(0)  # [8, 8]
+
+    torch.testing.assert_close(A.sum(dim=-1), torch.ones(8))
+
+
+def test_influence_model_separation_one_is_diagonal_only() -> None:
+    model_sep1 = AllostericInfluenceModel(
+        state_dim=6, hidden_dim=8, num_encoder_layers=1, min_sequence_separation=1
+    )
+    model_diag = AllostericInfluenceModel(
+        state_dim=6, hidden_dim=8, num_encoder_layers=1, min_sequence_separation=1
+    )
+    model_diag.load_state_dict(model_sep1.state_dict())
+
+    state = torch.randn(1, 3, 5, 6)
+    with torch.no_grad():
+        A1 = model_sep1(state)['influence_matrix']
+        A2 = model_diag(state)['influence_matrix']
+
+    torch.testing.assert_close(A1, A2)
+    diag = torch.diagonal(A1.squeeze(0))
+    torch.testing.assert_close(diag, torch.zeros(5))
+
+
+def test_influence_model_rejects_separation_less_than_one() -> None:
+    with pytest.raises(ValueError, match='min_sequence_separation'):
+        AllostericInfluenceModel(state_dim=6, hidden_dim=8, min_sequence_separation=0)
+
+
+def test_influence_model_rejects_separation_too_large_for_protein() -> None:
+    model = AllostericInfluenceModel(
+        state_dim=6, hidden_dim=8, num_encoder_layers=1, min_sequence_separation=5
+    )
+    state_features = torch.randn(1, 3, 4, 6)  # only 4 residues, sep=5 would mask everything
+
+    with pytest.raises(ValueError, match='no valid pairs'):
+        model(state_features)
