@@ -86,6 +86,7 @@ def train_influence_model(
     residue_chunk_size: int | None = None,
     deterministic: bool = False,
 ) -> InfluenceTrainResult:
+    min_sequence_separation = max(min_sequence_separation, 1)
     seed_everything(seed, deterministic=deterministic)
     torch_device = resolve_device(device)
     use_amp = mixed_precision and torch_device.type == 'cuda'

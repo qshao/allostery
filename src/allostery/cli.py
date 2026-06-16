@@ -13,7 +13,8 @@ from allostery.pipeline.cri_score import score_cri_trajectory
 from allostery.pipeline.cri_train import train_cri_model
 from allostery.pipeline.influence_score import score_influence_trajectory
 from allostery.pipeline.influence_train import train_influence_model
-from allostery.pipeline.score import load_scoring_model, score_trajectory
+from allostery.io.checkpoint import load_checkpoint
+from allostery.pipeline.score import build_scoring_model, load_scoring_model, score_trajectory
 from allostery.pipeline.train import TrainResult, train_model
 
 
@@ -116,7 +117,7 @@ def _run_train(config: AppConfig) -> TrainResult:
             hidden_dim=config.model.hidden_dim,
             num_encoder_layers=config.model.residue_layers,
             dropout=config.model.dropout,
-            min_sequence_separation=max(config.data.min_sequence_separation, 1),
+            min_sequence_separation=config.data.min_sequence_separation,
             epochs=training.epochs,
             learning_rate=training.learning_rate,
             sparsity_weight=training.sparsity_weight,
@@ -202,10 +203,10 @@ def _run_score(config: AppConfig) -> int:
     if scoring is None or model_path is None or score_csv_path is None:
         raise ValueError('score mode requires scoring config, model_path, and score_csv_path')
 
-    model = load_scoring_model(model_path)
+    checkpoint = load_checkpoint(model_path)
+    model = build_scoring_model(checkpoint)
     if config.model.family == 'influence':
-        from allostery.io.checkpoint import load_checkpoint
-        snapshot = load_checkpoint(model_path).metadata.get('training', {})
+        snapshot = checkpoint.metadata.get('training', {})
         scores = score_influence_trajectory(
             model=model,  # type: ignore[arg-type]
             pdb_path=config.data.pdb_path,
@@ -215,8 +216,9 @@ def _run_score(config: AppConfig) -> int:
             time_step=config.data.time_step,
             preprocess=config.data.preprocess,
             normalize=bool(snapshot.get('normalize', False)),
+            batch_size=config.training.batch_size if config.training else 8,
             device=config.training.device if config.training else 'cpu',
-            min_sequence_separation=max(config.data.min_sequence_separation, 1),
+            min_sequence_separation=config.data.min_sequence_separation,
         )
     elif config.model.family == 'cri':
         scores = score_cri_trajectory(

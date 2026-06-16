@@ -7,7 +7,7 @@ import torch
 from torch import Tensor, nn
 
 from allostery.data import build_training_samples
-from allostery.io.checkpoint import load_checkpoint
+from allostery.io.checkpoint import ModelCheckpoint, load_checkpoint
 from allostery.io.pdb import ResidueRecord
 from allostery.io.trajectory import load_trajectory
 from allostery.models.cri import CRILatentInteractionModel
@@ -50,8 +50,7 @@ def _residue_identifier(residue: ResidueRecord) -> ResidueIdentifier:
     }
 
 
-def load_scoring_model(checkpoint_path: str | Path) -> nn.Module:
-    checkpoint = load_checkpoint(checkpoint_path)
+def build_scoring_model(checkpoint: ModelCheckpoint) -> nn.Module:
     if checkpoint.model_family == 'cri':
         model = CRILatentInteractionModel(
             state_dim=checkpoint.residue_dim,
@@ -82,6 +81,10 @@ def load_scoring_model(checkpoint_path: str | Path) -> nn.Module:
     model.load_state_dict(checkpoint.state_dict)
     model.eval()
     return model
+
+
+def load_scoring_model(checkpoint_path: str | Path) -> nn.Module:
+    return build_scoring_model(load_checkpoint(checkpoint_path))
 
 
 def score_trajectory(
@@ -132,4 +135,4 @@ def score_trajectory(
     return ranked_scores
 
 
-__all__ = ["PairScore", "ResidueIdentifier", "load_scoring_model", "score_trajectory"]
+__all__ = ["PairScore", "ResidueIdentifier", "build_scoring_model", "load_scoring_model", "score_trajectory"]
