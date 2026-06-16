@@ -21,6 +21,7 @@ class ModelCheckpoint:
     config: dict[str, Any]
     metadata: dict[str, Any] = field(default_factory=dict)
     model_family: str = 'relational'
+    min_sequence_separation: int = 1
 
 
 def save_checkpoint(
@@ -35,6 +36,7 @@ def save_checkpoint(
     pair_layers: int = 2,
     dropout: float = 0.0,
     model_family: str = 'relational',
+    min_sequence_separation: int = 1,
     metadata: Mapping[str, Any] | None = None,
 ) -> None:
     target = Path(path)
@@ -52,6 +54,7 @@ def save_checkpoint(
             'config': dict(config_snapshot),
             'metadata': dict(metadata or {}),
             'model_family': model_family,
+            'min_sequence_separation': min_sequence_separation,
         },
         target,
     )
@@ -72,6 +75,7 @@ def load_checkpoint(path: str | Path) -> ModelCheckpoint:
         config=dict(_require_mapping(raw, 'config')),
         metadata=dict(metadata),
         model_family=str(raw.get('model_family', 'relational')),
+        min_sequence_separation=int(raw.get('min_sequence_separation', 1)),
     )
 
 

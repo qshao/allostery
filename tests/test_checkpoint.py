@@ -91,6 +91,54 @@ def test_checkpoint_round_trips_model_family(tmp_path: Path) -> None:
 
 
 
+def test_checkpoint_round_trips_min_sequence_separation(tmp_path: Path) -> None:
+    from allostery.io.checkpoint import load_checkpoint, save_checkpoint
+    from allostery.models.influence import AllostericInfluenceModel
+
+    model = AllostericInfluenceModel(
+        state_dim=6, hidden_dim=8, num_encoder_layers=1, min_sequence_separation=3
+    )
+    path = tmp_path / 'influence_sep3.pt'
+
+    save_checkpoint(
+        path=path,
+        model=model,
+        config_snapshot={},
+        residue_dim=6,
+        pair_dim=1,
+        hidden_dim=8,
+        target_dim=3,
+        residue_layers=1,
+        pair_layers=1,
+        dropout=0.0,
+        model_family='influence',
+        min_sequence_separation=3,
+    )
+
+    ckpt = load_checkpoint(path)
+    assert ckpt.min_sequence_separation == 3
+
+
+def test_checkpoint_defaults_min_sequence_separation_to_one(tmp_path: Path) -> None:
+    model = RelationalScoreModel(
+        residue_dim=10, pair_dim=5, hidden_dim=8, target_dim=3
+    )
+    path = tmp_path / 'relational.pt'
+
+    save_checkpoint(
+        path=path,
+        model=model,
+        config_snapshot={},
+        residue_dim=10,
+        pair_dim=5,
+        hidden_dim=8,
+        target_dim=3,
+    )
+
+    ckpt = load_checkpoint(path)
+    assert ckpt.min_sequence_separation == 1
+
+
 def test_checkpoint_round_trips_metadata(tmp_path: Path) -> None:
     model = RelationalScoreModel(
         residue_dim=10,
