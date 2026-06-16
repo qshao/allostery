@@ -85,8 +85,11 @@ def train_influence_model(
     torch_device = resolve_device(device)
     use_amp = mixed_precision and torch_device.type == 'cuda'
     if mixed_precision and not use_amp:
-        warnings.warn('mixed_precision requested but device is not CUDA; running in full precision')
-    scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
+        warnings.warn(
+            'mixed_precision requested but device is not CUDA; running in full precision',
+            stacklevel=2,
+        )
+    scaler = torch.amp.GradScaler('cuda', enabled=use_amp)
     trajectory = load_trajectory(Path(pdb_path), topology_path=topology_path)
     samples = build_influence_samples(
         trajectory.coordinates,
