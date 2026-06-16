@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from allostery.features.alignment import align_trajectory_coordinates, center_trajectory_coordinates
+from allostery.features.alignment import align_trajectory_coordinates, _kabsch_align, center_trajectory_coordinates
 
 
 def test_center_trajectory_coordinates_removes_translation() -> None:
@@ -41,3 +41,13 @@ def test_align_trajectory_coordinates_preserves_pairwise_distances() -> None:
 def test_align_trajectory_coordinates_rejects_invalid_reference_frame() -> None:
     with pytest.raises(IndexError, match="reference_frame_index"):
         align_trajectory_coordinates(np.zeros((2, 2, 3), dtype=np.float32), reference_frame_index=2)
+
+
+def test_batched_align_matches_per_frame_loop() -> None:
+    rng = np.random.default_rng(0)
+    coords = rng.standard_normal((5, 7, 3)).astype(np.float32)
+    reference = coords[0]
+    expected = np.stack([_kabsch_align(frame, reference) for frame in coords], axis=0)
+    result = align_trajectory_coordinates(coords, reference_frame_index=0)
+    assert result.shape == coords.shape
+    np.testing.assert_allclose(result, expected, atol=1e-5)

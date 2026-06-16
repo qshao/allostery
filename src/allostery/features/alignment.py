@@ -20,9 +20,22 @@ def align_trajectory_coordinates(
         raise IndexError("reference_frame_index is out of range")
 
     reference = coordinates[reference_frame_index]
-    aligned = np.empty_like(coordinates)
-    for frame_index, frame in enumerate(coordinates):
-        aligned[frame_index] = _kabsch_align(frame, reference)
+    reference_centroid = reference.mean(axis=0, keepdims=True)
+    reference_centered = reference - reference_centroid
+
+    frame_centroids = coordinates.mean(axis=1, keepdims=True)        # [T, 1, 3]
+    mobile_centered = coordinates - frame_centroids                  # [T, N, 3]
+
+    # Per-frame covariance: [T, 3, 3] = mobileᵀ @ reference
+    covariance = np.einsum('tni,nj->tij', mobile_centered, reference_centered)
+    left, _, right_t = np.linalg.svd(covariance)                    # [T,3,3] each
+    det = np.linalg.det(np.einsum('tij,tjk->tik', right_t.transpose(0, 2, 1), left.transpose(0, 2, 1)))
+    sign = np.where(det < 0.0, -1.0, 1.0)                           # [T]
+    right_t = right_t.copy()
+    right_t[:, -1, :] *= sign[:, None]
+    rotation = np.einsum('tij,tjk->tik', right_t.transpose(0, 2, 1), left.transpose(0, 2, 1))
+
+    aligned = np.einsum('tni,tij->tnj', mobile_centered, rotation) + reference_centroid
     return aligned.astype(np.float32, copy=False)
 
 
