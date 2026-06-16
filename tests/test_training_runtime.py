@@ -1,6 +1,16 @@
 from __future__ import annotations
 
-from allostery.training.runtime import split_samples
+import numpy as np
+
+from allostery.training.runtime import seed_everything, split_samples
+
+
+def test_seed_everything_seeds_numpy() -> None:
+    seed_everything(123)
+    first = np.random.rand(5)
+    seed_everything(123)
+    second = np.random.rand(5)
+    np.testing.assert_array_equal(first, second)
 
 
 def test_split_samples_is_deterministic_and_respects_validation_fraction() -> None:
