@@ -39,7 +39,7 @@ def score_influence_trajectory(
     time_step: float = 1.0,
     preprocess: str = 'none',
     topology_path: str | Path | None = None,
-    normalize: bool = False,
+    normalize: bool = True,
     batch_size: int = 8,
     device: str = 'cpu',
     min_sequence_separation: int = 1,
@@ -72,7 +72,8 @@ def score_influence_trajectory(
 
     mean_influence = (accumulated / max(count, 1)).cpu()  # [N, N]
 
-    rows, cols = torch.triu_indices(num_residues, num_residues, offset=1)
+    sep = max(min_sequence_separation, model.min_sequence_separation)
+    rows, cols = torch.triu_indices(num_residues, num_residues, offset=sep)
     i_on_j = mean_influence[cols, rows]   # influence of i on j  (A[j, i])
     j_on_i = mean_influence[rows, cols]   # influence of j on i  (A[i, j])
     pair_score = (i_on_j + j_on_i) / 2.0
