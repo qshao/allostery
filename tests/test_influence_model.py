@@ -70,3 +70,20 @@ def test_forward_single_residue_is_finite() -> None:
     assert out['influence_matrix'].shape == (2, 1, 1)
     assert torch.isfinite(out['acceleration']).all()
     assert torch.isfinite(out['influence_matrix']).all()
+
+
+def test_chunked_aggregation_matches_dense() -> None:
+    torch.manual_seed(0)
+    dense = AllostericInfluenceModel(state_dim=6, hidden_dim=8, num_encoder_layers=2)
+    chunked = AllostericInfluenceModel(
+        state_dim=6, hidden_dim=8, num_encoder_layers=2, residue_chunk_size=2
+    )
+    chunked.load_state_dict(dense.state_dict())
+    dense.eval()
+    chunked.eval()
+    state = torch.randn(2, 4, 5, 6)  # N=5, chunk=2 -> chunks of 2,2,1
+    with torch.no_grad():
+        a = dense(state)
+        b = chunked(state)
+    torch.testing.assert_close(a['acceleration'], b['acceleration'], atol=1e-6, rtol=1e-5)
+    torch.testing.assert_close(a['influence_matrix'], b['influence_matrix'], atol=1e-6, rtol=1e-5)

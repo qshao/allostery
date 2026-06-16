@@ -31,11 +31,15 @@ class AllostericInfluenceModel(nn.Module):
         hidden_dim: int,
         num_encoder_layers: int = 2,
         dropout: float = 0.0,
+        residue_chunk_size: int | None = None,
     ) -> None:
         super().__init__()
         if num_encoder_layers <= 0:
             raise ValueError('num_encoder_layers must be greater than zero')
+        if residue_chunk_size is not None and residue_chunk_size <= 0:
+            raise ValueError('residue_chunk_size must be greater than zero')
         self.hidden_dim = hidden_dim
+        self.residue_chunk_size = residue_chunk_size
         # Encode time-averaged state to compute stable Q and K
         self.encoder = _build_mlp(state_dim, hidden_dim, num_encoder_layers, dropout)
         # Q[j]: what kind of influence does j receive?
@@ -101,7 +105,17 @@ class AllostericInfluenceModel(nn.Module):
         V = self.value_proj(state_features)  # [batch, time, N, hidden_dim]
 
         # Aggregate: aggregated[b,t,j,:] = sum_i influence[b,j,i] * V[b,t,i,:]
-        aggregated = torch.matmul(influence_matrix.unsqueeze(1), V)  # [batch, time, N, hidden_dim]
+        chunk = self.residue_chunk_size
+        if chunk is None or chunk >= num_residues:
+            aggregated = torch.matmul(influence_matrix.unsqueeze(1), V)
+        else:
+            parts = []
+            for start in range(0, num_residues, chunk):
+                stop = min(start + chunk, num_residues)
+                # influence rows for receivers [start:stop] over all senders
+                rows = influence_matrix[:, start:stop, :].unsqueeze(1)  # [b,1,c,N]
+                parts.append(torch.matmul(rows, V))                    # [b,t,c,hidden]
+            aggregated = torch.cat(parts, dim=2)
 
         baseline = self.baseline_net(state_features)          # [batch, time, N, 3]
         acceleration = baseline + self.decode_net(aggregated)  # [batch, time, N, 3]
