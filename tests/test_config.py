@@ -433,3 +433,80 @@ def test_cuda_device_available_no_error(tmp_path: Path) -> None:
     )
     with unittest.mock.patch("torch.cuda.is_available", return_value=True):
         load_config(config_path)  # must not raise
+
+
+# ---------------------------------------------------------------------------
+# Task-10 tests: new config keys
+# ---------------------------------------------------------------------------
+
+from allostery.config import ConfigError  # noqa: E402
+
+
+def _base_lines(
+    extra_model: list[str] | None = None,
+    extra_training: list[str] | None = None,
+    extra_data: list[str] | None = None,
+) -> list[str]:
+    lines = [
+        'mode: run',
+        'data:',
+        f'  pdb_path: {FIXTURE_PDB}',
+        '  window_size: 3',
+        '  horizon_size: 1',
+        '  stride: 1',
+    ]
+    if extra_data:
+        lines.extend(extra_data)
+    lines += [
+        'model:',
+        '  family: influence',
+        '  hidden_dim: 8',
+        '  residue_layers: 1',
+        '  pair_layers: 1',
+        '  dropout: 0.0',
+    ]
+    if extra_model:
+        lines.extend(extra_model)
+    lines += [
+        'training:',
+        '  epochs: 1',
+        '  learning_rate: 0.001',
+        '  consistency_weight: 0.0',
+    ]
+    if extra_training:
+        lines.extend(extra_training)
+    lines += [
+        'scoring:',
+        '  top_k: 5',
+        'output:',
+        '  model_path: out/model.pt',
+        '  score_csv_path: out/scores.csv',
+    ]
+    return lines
+
+
+def test_new_keys_default(tmp_path: Path) -> None:
+    cfg_path = tmp_path / 'c.yaml'
+    _write_config(cfg_path, _base_lines())
+    cfg = load_config(cfg_path)
+    assert cfg.data.normalize is True
+    assert cfg.model.residue_chunk_size is None
+    assert cfg.training is not None
+    assert cfg.training.mixed_precision is False
+    assert cfg.training.grad_clip_norm == 1.0
+    assert cfg.training.lr_scheduler == 'plateau'
+    assert cfg.training.deterministic is False
+
+
+def test_bad_lr_scheduler_rejected(tmp_path: Path) -> None:
+    cfg_path = tmp_path / 'c.yaml'
+    _write_config(cfg_path, _base_lines(extra_training=['  lr_scheduler: bogus']))
+    with pytest.raises(ConfigError, match='lr_scheduler'):
+        load_config(cfg_path)
+
+
+def test_bad_residue_chunk_size_rejected(tmp_path: Path) -> None:
+    cfg_path = tmp_path / 'c.yaml'
+    _write_config(cfg_path, _base_lines(extra_model=['  residue_chunk_size: 0']))
+    with pytest.raises(ConfigError, match='residue_chunk_size'):
+        load_config(cfg_path)

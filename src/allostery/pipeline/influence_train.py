@@ -82,8 +82,10 @@ def train_influence_model(
     checkpoint_path: str | Path | None = None,
     config_snapshot: Mapping[str, Any] | None = None,
     topology_path: str | Path | None = None,
+    residue_chunk_size: int | None = None,
+    deterministic: bool = False,
 ) -> InfluenceTrainResult:
-    seed_everything(seed)
+    seed_everything(seed, deterministic=deterministic)
     torch_device = resolve_device(device)
     use_amp = mixed_precision and torch_device.type == 'cuda'
     if mixed_precision and not use_amp:
@@ -114,6 +116,7 @@ def train_influence_model(
         hidden_dim=hidden_dim,
         num_encoder_layers=num_encoder_layers,
         dropout=dropout,
+        residue_chunk_size=residue_chunk_size,
     ).to(torch_device)
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
@@ -216,6 +219,8 @@ def train_influence_model(
                     'best_epoch': best_epoch,
                     'best_validation_loss': best_validation_loss,
                     'last_loss': last_loss,
+                    'normalize': normalize,
+                    'residue_chunk_size': residue_chunk_size,
                 }
             },
         )

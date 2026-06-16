@@ -17,13 +17,16 @@ class ConfigError(ValueError):
 _DATA_KEYS: frozenset[str] = frozenset({
     'pdb_path', 'window_size', 'horizon_size', 'stride', 'time_step',
     'distance_cutoff', 'max_neighbors', 'min_sequence_separation', 'preprocess', 'topology_path',
+    'normalize',
 })
 _MODEL_KEYS: frozenset[str] = frozenset({
     'family', 'hidden_dim', 'residue_layers', 'pair_layers', 'dropout', 'edge_types',
+    'residue_chunk_size',
 })
 _TRAINING_KEYS: frozenset[str] = frozenset({
     'epochs', 'learning_rate', 'consistency_weight', 'entropy_weight', 'no_edge_weight',
     'sparsity_weight', 'validation_fraction', 'patience', 'seed', 'device', 'batch_size', 'verbose',
+    'mixed_precision', 'grad_clip_norm', 'lr_scheduler', 'deterministic',
 })
 _SCORING_KEYS: frozenset[str] = frozenset({'top_k'})
 _OUTPUT_KEYS: frozenset[str] = frozenset({'model_path', 'score_csv_path'})
@@ -41,6 +44,7 @@ class DataConfig:
     min_sequence_separation: int = 0
     preprocess: str = 'none'
     topology_path: Path | None = None
+    normalize: bool = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -51,6 +55,7 @@ class ModelConfig:
     dropout: float
     family: str = 'relational'
     edge_types: int | None = None
+    residue_chunk_size: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -67,6 +72,10 @@ class TrainingConfig:
     device: str = 'cpu'
     batch_size: int = 4
     verbose: bool = True
+    mixed_precision: bool = False
+    grad_clip_norm: float | None = 1.0
+    lr_scheduler: str = 'plateau'
+    deterministic: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -132,6 +141,14 @@ def load_config(path: str | Path) -> AppConfig:
             device=str(training_raw.get('device', 'cpu')),
             batch_size=int(training_raw.get('batch_size', 4)),
             verbose=bool(training_raw.get('verbose', True)),
+            mixed_precision=bool(training_raw.get('mixed_precision', False)),
+            grad_clip_norm=(
+                float(training_raw['grad_clip_norm'])
+                if 'grad_clip_norm' in training_raw and training_raw['grad_clip_norm'] is not None
+                else (None if 'grad_clip_norm' in training_raw else 1.0)
+            ),
+            lr_scheduler=str(training_raw.get('lr_scheduler', 'plateau')),
+            deterministic=bool(training_raw.get('deterministic', False)),
         )
 
     scoring = None
@@ -152,6 +169,7 @@ def load_config(path: str | Path) -> AppConfig:
             min_sequence_separation=int(data_raw.get('min_sequence_separation', 0)),
             preprocess=str(data_raw.get('preprocess', 'none')),
             topology_path=_optional_path(base_dir, data_raw.get('topology_path')),
+            normalize=bool(data_raw.get('normalize', True)),
         ),
         model=ModelConfig(
             hidden_dim=int(_require_value(model_raw, 'hidden_dim')),
@@ -160,6 +178,10 @@ def load_config(path: str | Path) -> AppConfig:
             dropout=float(_require_value(model_raw, 'dropout')),
             family=str(model_raw.get('family', 'relational')),
             edge_types=int(model_raw['edge_types']) if model_raw.get('edge_types') is not None else None,
+            residue_chunk_size=(
+                int(model_raw['residue_chunk_size'])
+                if model_raw.get('residue_chunk_size') is not None else None
+            ),
         ),
         training=training,
         scoring=scoring,
@@ -276,6 +298,10 @@ def validate_config(config: AppConfig, config_file: str = "") -> None:
         errors.append(f"model.residue_layers must be > 0 (got {config.model.residue_layers})")
     if config.model.pair_layers <= 0:
         errors.append(f"model.pair_layers must be > 0 (got {config.model.pair_layers})")
+    if config.model.residue_chunk_size is not None and config.model.residue_chunk_size <= 0:
+        errors.append(
+            f"model.residue_chunk_size must be > 0 (got {config.model.residue_chunk_size})"
+        )
     if config.model.family not in {'relational', 'cri', 'influence'}:
         errors.append(
             f"model.family must be one of relational, cri, or influence (got {config.model.family!r})"
@@ -333,6 +359,15 @@ def validate_config(config: AppConfig, config_file: str = "") -> None:
             if config.training.batch_size <= 0:
                 errors.append(
                     f"training.batch_size must be > 0 (got {config.training.batch_size})"
+                )
+            if config.training.lr_scheduler not in {'none', 'plateau'}:
+                errors.append(
+                    f"training.lr_scheduler must be one of none, plateau "
+                    f"(got {config.training.lr_scheduler!r})"
+                )
+            if config.training.grad_clip_norm is not None and config.training.grad_clip_norm <= 0:
+                errors.append(
+                    f"training.grad_clip_norm must be > 0 (got {config.training.grad_clip_norm})"
                 )
     if config.mode in {'score', 'run'}:
         if config.scoring is None:

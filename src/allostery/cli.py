@@ -60,13 +60,12 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     # Dispatch: subcommand 'check'
     if args.command == 'check':
-        import sys as _sys2
         try:
             config = load_config(args.config_path)
             print(f'Config OK: mode={config.mode}, family={config.model.family}')
             return 0
         except Exception as exc:
-            print(str(exc), file=_sys2.stderr)
+            print(str(exc), file=_sys.stderr)
             return 1
 
     # Dispatch: subcommand 'analyze'
@@ -129,6 +128,12 @@ def _run_train(config: AppConfig) -> TrainResult:
             checkpoint_path=model_path,
             config_snapshot=_serialize_config(config),
             topology_path=config.data.topology_path,
+            normalize=config.data.normalize,
+            grad_clip_norm=training.grad_clip_norm,
+            mixed_precision=training.mixed_precision,
+            lr_scheduler=training.lr_scheduler,
+            residue_chunk_size=config.model.residue_chunk_size,
+            deterministic=training.deterministic,
         )
         print(f'trained samples={inf_result.num_samples} checkpoint={model_path}')
         return inf_result  # type: ignore[return-value]
@@ -196,6 +201,8 @@ def _run_score(config: AppConfig) -> int:
 
     model = load_scoring_model(model_path)
     if config.model.family == 'influence':
+        from allostery.io.checkpoint import load_checkpoint
+        snapshot = load_checkpoint(model_path).metadata.get('training', {})
         scores = score_influence_trajectory(
             model=model,  # type: ignore[arg-type]
             pdb_path=config.data.pdb_path,
@@ -203,6 +210,8 @@ def _run_score(config: AppConfig) -> int:
             stride=config.data.stride,
             time_step=config.data.time_step,
             preprocess=config.data.preprocess,
+            normalize=bool(snapshot.get('normalize', False)),
+            device=config.training.device if config.training else 'cpu',
         )
     elif config.model.family == 'cri':
         scores = score_cri_trajectory(
