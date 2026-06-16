@@ -10,7 +10,7 @@ from torch import Tensor
 
 from allostery.data import TrainingSample, build_training_samples
 from allostery.io.checkpoint import save_checkpoint
-from allostery.io.pdb import load_multimodel_pdb
+from allostery.io.trajectory import load_trajectory
 from allostery.models.relational import RelationalScoreModel
 from allostery.training.objectives import TrainingLossBreakdown, consistency_loss, future_summary_loss
 from allostery.training.runtime import (
@@ -47,8 +47,9 @@ def _load_training_samples(
     window_size: int,
     horizon_size: int,
     stride: int,
+    topology_path: str | Path | None = None,
 ) -> list[TrainingSample]:
-    trajectory = load_multimodel_pdb(Path(pdb_path))
+    trajectory = load_trajectory(Path(pdb_path), topology_path=topology_path)
     samples = build_training_samples(
         trajectory.coordinates,
         window_size=window_size,
@@ -179,6 +180,7 @@ def train_relational_model(
     device: str = 'cpu',
     batch_size: int = 4,
     verbose: bool = True,
+    topology_path: str | Path | None = None,
 ) -> TrainResult:
     seed_everything(seed)
     torch_device = resolve_device(device)
@@ -187,6 +189,7 @@ def train_relational_model(
         window_size=window_size,
         horizon_size=horizon_size,
         stride=stride,
+        topology_path=topology_path,
     )
     train_samples, validation_samples = split_samples(samples, validation_fraction, seed)
     if not train_samples:
@@ -292,6 +295,7 @@ def train_model(
     verbose: bool = True,
     checkpoint_path: str | Path | None = None,
     config_snapshot: dict[str, Any] | None = None,
+    topology_path: str | Path | None = None,
 ) -> TrainResult:
     result = train_relational_model(
         pdb_path=pdb_path,
@@ -311,6 +315,7 @@ def train_model(
         device=device,
         batch_size=batch_size,
         verbose=verbose,
+        topology_path=topology_path,
     )
     if checkpoint_path is not None:
         dimensions = _sample_dimensions(
@@ -319,6 +324,7 @@ def train_model(
                 window_size=window_size,
                 horizon_size=horizon_size,
                 stride=stride,
+                topology_path=topology_path,
             )
         )
         save_checkpoint(

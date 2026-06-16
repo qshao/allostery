@@ -141,6 +141,7 @@ def _run_train(config: AppConfig) -> TrainResult:
     if config.model.family == 'cri':
         result = train_cri_model(
             pdb_path=config.data.pdb_path,
+            topology_path=config.data.topology_path,
             window_size=config.data.window_size,
             stride=config.data.stride,
             time_step=config.data.time_step,
@@ -169,6 +170,7 @@ def _run_train(config: AppConfig) -> TrainResult:
 
     result = train_model(
         pdb_path=config.data.pdb_path,
+        topology_path=config.data.topology_path,
         window_size=config.data.window_size,
         horizon_size=config.data.horizon_size,
         stride=config.data.stride,
@@ -206,6 +208,7 @@ def _run_score(config: AppConfig) -> int:
         scores = score_influence_trajectory(
             model=model,  # type: ignore[arg-type]
             pdb_path=config.data.pdb_path,
+            topology_path=config.data.topology_path,
             window_size=config.data.window_size,
             stride=config.data.stride,
             time_step=config.data.time_step,
@@ -217,6 +220,7 @@ def _run_score(config: AppConfig) -> int:
         scores = score_cri_trajectory(
             model=model,  # type: ignore[arg-type]
             pdb_path=config.data.pdb_path,
+            topology_path=config.data.topology_path,
             window_size=config.data.window_size,
             stride=config.data.stride,
             time_step=config.data.time_step,
@@ -229,6 +233,7 @@ def _run_score(config: AppConfig) -> int:
         scores = score_trajectory(
             model=model,  # type: ignore[arg-type]
             pdb_path=config.data.pdb_path,
+            topology_path=config.data.topology_path,
             window_size=config.data.window_size,
             horizon_size=config.data.horizon_size,
             stride=config.data.stride,

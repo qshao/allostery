@@ -7,7 +7,8 @@ from typing import TypedDict
 import torch
 
 from allostery.cri.data import build_cri_training_samples
-from allostery.io.pdb import ResidueRecord, load_multimodel_pdb
+from allostery.io.pdb import ResidueRecord
+from allostery.io.trajectory import load_trajectory
 from allostery.models.cri import CRILatentInteractionModel
 from allostery.pipeline.cri_train import _tensorize_sample
 from allostery.pipeline.score import ResidueIdentifier
@@ -43,8 +44,9 @@ def score_cri_trajectory(
     max_neighbors: int,
     min_sequence_separation: int = 0,
     preprocess: str = "none",
+    topology_path: str | Path | None = None,
 ) -> list[CRIPairScore]:
-    trajectory = load_multimodel_pdb(Path(pdb_path))
+    trajectory = load_trajectory(Path(pdb_path), topology_path=topology_path)
     samples = build_cri_training_samples(
         trajectory.coordinates,
         window_size=window_size,

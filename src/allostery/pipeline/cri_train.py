@@ -10,7 +10,7 @@ from torch import Tensor
 
 from allostery.cri.data import CRISample, build_cri_training_samples
 from allostery.io.checkpoint import save_checkpoint
-from allostery.io.pdb import load_multimodel_pdb
+from allostery.io.trajectory import load_trajectory
 from allostery.models.cri import CRILatentInteractionModel
 from allostery.training.cri_objectives import cri_loss
 from allostery.training.runtime import (
@@ -97,10 +97,11 @@ def train_cri_model(
     verbose: bool = True,
     checkpoint_path: str | Path | None = None,
     config_snapshot: Mapping[str, Any] | None = None,
+    topology_path: str | Path | None = None,
 ) -> CRITrainResult:
     seed_everything(seed)
     torch_device = resolve_device(device)
-    trajectory = load_multimodel_pdb(Path(pdb_path))
+    trajectory = load_trajectory(Path(pdb_path), topology_path=topology_path)
     samples = build_cri_training_samples(
         trajectory.coordinates,
         window_size=window_size,

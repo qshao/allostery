@@ -8,7 +8,8 @@ from torch import Tensor, nn
 
 from allostery.data import build_training_samples
 from allostery.io.checkpoint import load_checkpoint
-from allostery.io.pdb import ResidueRecord, load_multimodel_pdb
+from allostery.io.pdb import ResidueRecord
+from allostery.io.trajectory import load_trajectory
 from allostery.models.cri import CRILatentInteractionModel
 from allostery.models.influence import AllostericInfluenceModel
 from allostery.models.relational import RelationalScoreModel
@@ -86,8 +87,9 @@ def score_trajectory(
     window_size: int = 8,
     horizon_size: int = 4,
     stride: int = 2,
+    topology_path: str | Path | None = None,
 ) -> list[PairScore]:
-    trajectory = load_multimodel_pdb(Path(pdb_path))
+    trajectory = load_trajectory(Path(pdb_path), topology_path=topology_path)
     samples = build_training_samples(
         trajectory.coordinates,
         window_size=window_size,

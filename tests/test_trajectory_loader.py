@@ -62,3 +62,28 @@ def test_load_trajectory_error_message_mentions_both_packages(tmp_path: Path) ->
     message = str(exc_info.value)
     assert "MDAnalysis" in message
     assert "mdtraj" in message
+
+
+def test_train_influence_accepts_topology_path_kwarg(fixture_path: Path) -> None:
+    from allostery.pipeline.influence_train import train_influence_model
+
+    # topology_path=None should work for .pdb (existing behaviour unchanged)
+    result = train_influence_model(
+        pdb_path=fixture_path / "tiny_trajectory.pdb",
+        window_size=3,
+        stride=1,
+        time_step=1.0,
+        hidden_dim=8,
+        num_encoder_layers=1,
+        dropout=0.0,
+        epochs=1,
+        learning_rate=1e-3,
+        sparsity_weight=0.0,
+        validation_fraction=0.0,
+        patience=0,
+        seed=0,
+        device="cpu",
+        batch_size=1,
+        topology_path=None,
+    )
+    assert result.num_samples >= 1
