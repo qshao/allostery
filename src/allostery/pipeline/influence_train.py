@@ -9,9 +9,9 @@ import torch
 
 from allostery.influence.data import InfluenceSample, build_influence_samples
 from allostery.io.checkpoint import save_checkpoint
-from allostery.io.pdb import load_multimodel_pdb
+from allostery.io.trajectory import load_trajectory
 from allostery.models.influence import AllostericInfluenceModel
-from allostery.training.influence_objectives import influence_loss
+from allostery.training.influence_objectives import InfluenceLossBreakdown, influence_loss
 from allostery.training.runtime import (
     iter_batches,
     resolve_device,
@@ -73,13 +73,15 @@ def train_influence_model(
     seed: int = 0,
     device: str = 'cpu',
     batch_size: int = 4,
+    grad_clip_norm: float | None = 1.0,
     verbose: bool = True,
     checkpoint_path: str | Path | None = None,
     config_snapshot: Mapping[str, Any] | None = None,
+    topology_path: str | Path | None = None,
 ) -> InfluenceTrainResult:
     seed_everything(seed)
     torch_device = resolve_device(device)
-    trajectory = load_multimodel_pdb(Path(pdb_path))
+    trajectory = load_trajectory(Path(pdb_path), topology_path=topology_path)
     samples = build_influence_samples(
         trajectory.coordinates,
         window_size=window_size,
@@ -118,8 +120,14 @@ def train_influence_model(
             batch = stack_influence_batch(batch_samples, torch_device)
             output = model(batch.state_features)
             losses = influence_loss(output, batch.acceleration_targets, sparsity_weight=sparsity_weight)
+            if not torch.isfinite(losses.total):
+                raise ValueError(
+                    f'non-finite training loss at epoch {epoch + 1}, batch {epoch_batch_count + 1}'
+                )
             optimizer.zero_grad()
             losses.total.backward()
+            if grad_clip_norm is not None:
+                torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip_norm)
             optimizer.step()
             last_loss = float(losses.total.detach().item())
             epoch_loss_sum += last_loss
@@ -201,4 +209,4 @@ def train_influence_model(
     )
 
 
-__all__ = ['InfluenceTrainResult', 'train_influence_model']
+__all__ = ['InfluenceLossBreakdown', 'InfluenceTrainResult', 'train_influence_model']

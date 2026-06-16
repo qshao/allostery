@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 import torch
 
 from allostery.training.influence_objectives import InfluenceLossBreakdown, influence_loss
@@ -60,6 +61,24 @@ def test_train_influence_model_runs_on_tiny_trajectory(fixture_path: Path) -> No
     assert result.num_samples >= 1
     assert result.last_loss >= 0.0
     assert result.train_samples >= 1
+
+
+def test_non_finite_loss_raises(fixture_path, monkeypatch) -> None:
+    import allostery.pipeline.influence_train as mod
+
+    def fake_loss(prediction, target_acceleration, sparsity_weight):
+        bad = prediction['acceleration'].sum() * float('inf')
+        return mod.InfluenceLossBreakdown(reconstruction=bad, sparsity=bad * 0.0)
+
+    monkeypatch.setattr(mod, 'influence_loss', fake_loss)
+    with pytest.raises(ValueError, match='non-finite'):
+        train_influence_model(
+            pdb_path=fixture_path / 'tiny_trajectory.pdb',
+            window_size=3, stride=1, time_step=1.0,
+            hidden_dim=8, num_encoder_layers=1, dropout=0.0,
+            epochs=1, learning_rate=1e-3, sparsity_weight=0.0,
+            validation_fraction=0.0, patience=0, seed=0, device='cpu', batch_size=1,
+        )
 
 
 def test_train_influence_model_saves_checkpoint(fixture_path: Path, tmp_path: Path) -> None:
