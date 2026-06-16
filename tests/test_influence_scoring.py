@@ -6,6 +6,27 @@ from allostery.pipeline.influence_train import train_influence_model
 from allostery.pipeline.influence_score import score_influence_trajectory
 
 
+def test_batched_scoring_matches_unbatched(fixture_path: Path) -> None:
+    result = train_influence_model(
+        pdb_path=fixture_path / 'tiny_trajectory.pdb',
+        window_size=3, stride=1, time_step=1.0,
+        hidden_dim=8, num_encoder_layers=1, dropout=0.0,
+        epochs=1, learning_rate=1e-3, sparsity_weight=0.0,
+        validation_fraction=0.0, patience=0, seed=0, device='cpu', batch_size=1,
+    )
+    common = dict(pdb_path=fixture_path / 'tiny_trajectory.pdb',
+                  window_size=3, stride=1, time_step=1.0)
+    one = score_influence_trajectory(model=result.model, batch_size=1, **common)
+    many = score_influence_trajectory(model=result.model, batch_size=8, **common)
+    assert len(one) == len(many)
+    for a, b in zip(one, many, strict=True):
+        assert a['residue_i']['index'] == b['residue_i']['index']
+        assert a['residue_j']['index'] == b['residue_j']['index']
+        assert abs(a['score'] - b['score']) < 1e-6
+        assert abs(a['influence_i_on_j'] - b['influence_i_on_j']) < 1e-6
+        assert abs(a['influence_j_on_i'] - b['influence_j_on_i']) < 1e-6
+
+
 def test_score_influence_trajectory_returns_ranked_pairs(fixture_path: Path) -> None:
     result = train_influence_model(
         pdb_path=fixture_path / 'tiny_trajectory.pdb',

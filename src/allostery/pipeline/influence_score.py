@@ -6,9 +6,11 @@ from typing import TypedDict
 import torch
 
 from allostery.influence.data import build_influence_samples
-from allostery.io.pdb import ResidueRecord, load_multimodel_pdb
+from allostery.io.pdb import ResidueRecord
+from allostery.io.trajectory import load_trajectory
 from allostery.models.influence import AllostericInfluenceModel
 from allostery.pipeline.score import ResidueIdentifier
+from allostery.training.runtime import iter_batches, resolve_device, stack_influence_batch
 
 
 class InfluencePairScore(TypedDict, total=False):
@@ -36,8 +38,12 @@ def score_influence_trajectory(
     stride: int,
     time_step: float = 1.0,
     preprocess: str = 'none',
+    topology_path: str | Path | None = None,
+    normalize: bool = False,
+    batch_size: int = 8,
+    device: str = 'cpu',
 ) -> list[InfluencePairScore]:
-    trajectory = load_multimodel_pdb(Path(pdb_path))
+    trajectory = load_trajectory(Path(pdb_path), topology_path=topology_path)
     samples = build_influence_samples(
         trajectory.coordinates,
         window_size=window_size,
@@ -48,41 +54,38 @@ def score_influence_trajectory(
     if not samples:
         raise ValueError('trajectory did not yield any influence scoring windows')
 
+    torch_device = resolve_device(device)
     num_residues = trajectory.coordinates.shape[1]
-    # Accumulate influence matrices across windows
-    accumulated = torch.zeros(num_residues, num_residues)
+    accumulated = torch.zeros(num_residues, num_residues, device=torch_device)
     count = 0
 
+    model = model.to(torch_device)
     model.eval()
     with torch.no_grad():
-        for sample in samples:
-            state_features = torch.as_tensor(
-                sample.state_features[None, ...], dtype=torch.float32
-            )
-            output = model(state_features)
-            # influence_matrix[0, j, i] = influence of i on j
-            accumulated += output['influence_matrix'].squeeze(0).cpu()
-            count += 1
+        for batch_samples in iter_batches(samples, batch_size):
+            batch = stack_influence_batch(batch_samples, torch_device)
+            output = model(batch.state_features)
+            accumulated += output['influence_matrix'].sum(dim=0)
+            count += len(batch_samples)
 
-    mean_influence = accumulated / max(count, 1)  # [N, N]
+    mean_influence = (accumulated / max(count, 1)).cpu()  # [N, N]
 
-    # Score each unordered pair (i, j) as mean of both directed influences
-    scores: list[InfluencePairScore] = []
-    for i in range(num_residues):
-        for j in range(i + 1, num_residues):
-            i_on_j = float(mean_influence[j, i].item())  # i → j
-            j_on_i = float(mean_influence[i, j].item())  # j → i
-            scores.append(
-                {
-                    'residue_i': _residue_identifier(trajectory.residues[i]),
-                    'residue_j': _residue_identifier(trajectory.residues[j]),
-                    'score': (i_on_j + j_on_i) / 2.0,
-                    'influence_i_on_j': i_on_j,
-                    'influence_j_on_i': j_on_i,
-                    'support_count': count,
-                }
-            )
+    rows, cols = torch.triu_indices(num_residues, num_residues, offset=1)
+    i_on_j = mean_influence[cols, rows]   # influence of i on j  (A[j, i])
+    j_on_i = mean_influence[rows, cols]   # influence of j on i  (A[i, j])
+    pair_score = (i_on_j + j_on_i) / 2.0
 
+    scores: list[InfluencePairScore] = [
+        {
+            'residue_i': _residue_identifier(trajectory.residues[int(i)]),
+            'residue_j': _residue_identifier(trajectory.residues[int(j)]),
+            'score': float(pair_score[k].item()),
+            'influence_i_on_j': float(i_on_j[k].item()),
+            'influence_j_on_i': float(j_on_i[k].item()),
+            'support_count': count,
+        }
+        for k, (i, j) in enumerate(zip(rows.tolist(), cols.tolist()))
+    ]
     scores.sort(key=lambda item: item['score'], reverse=True)
     return scores
 
