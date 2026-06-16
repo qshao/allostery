@@ -75,11 +75,13 @@ pytest -q
 
 ## Commands
 
-The CLI has two commands:
+The CLI has three commands:
 
 ```
-allostery run <config.yaml>   # train / score / run pipeline from YAML config
-allostery analyze <scores.csv> [options]   # post-process: network + channels
+allostery run <config.yaml>              # train / score / run pipeline from YAML config
+allostery check <config.yaml>            # validate config without running anything
+allostery analyze <scores.csv> [options] # post-process: network + channels
+allostery --version                      # print version and exit
 
 # Legacy short form (no subcommand) still works:
 allostery my_config.yaml
@@ -157,6 +159,16 @@ Options:
 | `--top-paths N` | 5 | Shortest paths to list |
 | `--top-hubs N` | 10 | Hub residues to list |
 
+### Config validation (check)
+
+Validate a config file without running the pipeline — useful to catch typos and missing files before a long training run:
+
+```bash
+allostery check my_config.yaml
+```
+
+Exits 0 with `Config OK: mode=run, family=influence` on success, or exits 1 and prints the validation errors to stderr.
+
 ## Model Families
 
 | Family | Description |
@@ -173,10 +185,16 @@ Key parameters for the `influence` model:
 
 - `data.window_size` — frames per training window (minimum 3)
 - `data.preprocess` — `none`, `center`, or `align`
+- `data.normalize` — remove each frame's centroid from position features for translation invariance (default `true`)
 - `model.hidden_dim` — network width (32–256 depending on protein size)
 - `model.residue_layers` — encoder depth (2–4)
+- `model.residue_chunk_size` — tile the influence aggregation over receivers to bound peak memory on large proteins (default: unset = dense)
 - `training.sparsity_weight` — entropy penalty for sparse network (0.001–0.01 typical)
 - `training.device` — `cpu` or `cuda`
+- `training.mixed_precision` — enable CUDA autocast/GradScaler (default `false`; no-op on CPU)
+- `training.grad_clip_norm` — max gradient norm (default `1.0`; set to `null` to disable)
+- `training.lr_scheduler` — `none` or `plateau` (default `plateau`)
+- `training.deterministic` — set cuDNN deterministic flags for reproducible GPU runs (default `false`)
 
 Full config reference and model description: [docs/tutorial.md](docs/tutorial.md).
 

@@ -16,8 +16,9 @@ This tutorial walks you through installing the package, preparing your trajector
 8. [Running in three modes](#8-running-in-three-modes)
 9. [Interpreting the output](#9-interpreting-the-output)
 10. [Allosteric network analysis](#10-allosteric-network-analysis)
-11. [Tuning the model](#11-tuning-the-model)
-12. [Python API](#12-python-api)
+11. [Validating your config](#11-validating-your-config)
+12. [Tuning the model](#12-tuning-the-model)
+13. [Python API](#13-python-api)
 
 ---
 
@@ -102,12 +103,17 @@ allostery --help
 Expected output:
 
 ```
-usage: allostery [-h] {run,analyze} ...
+usage: allostery [-h] [--version] {run,check,analyze} ...
 
 positional arguments:
-  {run,analyze}
-    run          Run training/scoring pipeline from config YAML
-    analyze      Analyze allosteric network from scores CSV
+  {run,check,analyze}
+    run                Run training/scoring pipeline from config YAML
+    check              Validate config without running the pipeline
+    analyze            Analyze allosteric network from scores CSV
+
+options:
+  -h, --help           show this help message and exit
+  --version            show program's version number and exit
 ```
 
 Run the bundled tests to confirm everything works:
@@ -479,7 +485,38 @@ for path_labels, dist in paths:
 
 ---
 
-## 11. Tuning the model
+## 11. Validating your config
+
+Before starting a long training run, use `allostery check` to validate your config file without executing anything:
+
+```bash
+allostery check my_config.yaml
+```
+
+On success it prints:
+
+```
+Config OK: mode=run, family=influence
+```
+
+and exits with code 0. If the config has errors — missing files, out-of-range values, unknown keys — it prints all errors to stderr and exits with code 1:
+
+```
+my_config.yaml: data.window_size must be >= 3 (got 1)
+my_config.yaml: data.pdb_path does not exist (got PosixPath('missing.pdb'))
+```
+
+All errors are reported at once so you can fix them in a single pass. This is also useful in CI/CD pipelines: add `allostery check config.yaml` as a pre-flight step before submitting a GPU job.
+
+To check the installed version:
+
+```bash
+allostery --version
+```
+
+---
+
+## 12. Tuning the model
 
 ### Trajectory preprocessing
 
@@ -540,7 +577,7 @@ python -c "import torch; print(torch.cuda.is_available(), torch.cuda.device_coun
 
 ---
 
-## 12. Python API
+## 13. Python API
 
 You can drive the full pipeline from Python without a YAML config.
 
@@ -658,6 +695,7 @@ mean_matrix = torch.stack(matrices).mean(dim=0)  # [N, N]
 | `data.stride` | int | — | Step between windows (≥ 1) |
 | `data.time_step` | float | 1.0 | Time between frames |
 | `data.preprocess` | string | `none` | `none`, `center`, or `align` |
+| `data.normalize` | bool | `true` | Remove each frame's centroid from position features for translation invariance |
 | `data.distance_cutoff` | float | 20.0 | CRI only: neighbor cutoff in Å |
 | `data.max_neighbors` | int | 2 | CRI only: max directed neighbors |
 | `data.min_sequence_separation` | int | 0 | CRI only: min sequence gap for edges |
@@ -666,6 +704,7 @@ mean_matrix = torch.stack(matrices).mean(dim=0)  # [N, N]
 | `model.residue_layers` | int | — | Per-residue encoder depth |
 | `model.pair_layers` | int | — | Pair encoder depth (relational/cri) |
 | `model.dropout` | float | — | Dropout rate [0, 1) |
+| `model.residue_chunk_size` | int | — | Tile the influence aggregation over receivers to bound peak memory on large proteins (unset = dense) |
 | `model.edge_types` | int | — | CRI only: number of latent edge types (≥ 2) |
 | `training.epochs` | int | — | Max training epochs |
 | `training.learning_rate` | float | — | Adam learning rate |
@@ -678,6 +717,10 @@ mean_matrix = torch.stack(matrices).mean(dim=0)  # [N, N]
 | `training.seed` | int | 0 | Random seed |
 | `training.device` | string | `cpu` | PyTorch device string |
 | `training.batch_size` | int | 4 | Samples per gradient update |
+| `training.mixed_precision` | bool | `false` | Enable CUDA autocast/GradScaler (no-op on CPU) |
+| `training.grad_clip_norm` | float | 1.0 | Max gradient norm; set to `null` to disable |
+| `training.lr_scheduler` | string | `plateau` | `none` or `plateau` |
+| `training.deterministic` | bool | `false` | Set cuDNN deterministic flags for reproducible GPU runs |
 | `scoring.top_k` | int | — | Printed in completion message |
 | `output.model_path` | path | — | Checkpoint save/load path |
 | `output.score_csv_path` | path | — | CSV output path |
