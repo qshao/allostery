@@ -98,3 +98,23 @@ def test_score_influence_trajectory_covers_all_pairs(fixture_path: Path) -> None
     num_residues = trajectory.coordinates.shape[1]
     expected_pairs = num_residues * (num_residues - 1) // 2
     assert len(scores) == expected_pairs
+
+
+def test_score_influence_trajectory_respects_min_sequence_separation(fixture_path: Path) -> None:
+    result = train_influence_model(
+        pdb_path=fixture_path / 'tiny_trajectory.pdb',
+        window_size=3, stride=1, time_step=1.0,
+        hidden_dim=8, num_encoder_layers=1, dropout=0.0,
+        epochs=1, learning_rate=1e-3, sparsity_weight=0.0,
+        validation_fraction=0.0, patience=0, seed=0, device='cpu',
+        batch_size=1, min_sequence_separation=1,
+    )
+
+    scores = score_influence_trajectory(
+        model=result.model,
+        pdb_path=fixture_path / 'tiny_trajectory.pdb',
+        window_size=3, stride=1, time_step=1.0,
+        min_sequence_separation=1,
+    )
+
+    assert len(scores) > 0

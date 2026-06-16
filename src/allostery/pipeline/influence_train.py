@@ -68,6 +68,7 @@ def train_influence_model(
     epochs: int,
     learning_rate: float,
     sparsity_weight: float,
+    min_sequence_separation: int = 1,
     preprocess: str = 'none',
     validation_fraction: float = 0.2,
     patience: int = 5,
@@ -117,6 +118,7 @@ def train_influence_model(
         num_encoder_layers=num_encoder_layers,
         dropout=dropout,
         residue_chunk_size=residue_chunk_size,
+        min_sequence_separation=min_sequence_separation,
     ).to(torch_device)
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
@@ -207,6 +209,7 @@ def train_influence_model(
             pair_layers=1,
             dropout=dropout,
             model_family='influence',
+            min_sequence_separation=min_sequence_separation,
             metadata={
                 'training': {
                     'seed': seed,

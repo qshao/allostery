@@ -65,6 +65,7 @@ def load_scoring_model(checkpoint_path: str | Path) -> nn.Module:
             hidden_dim=checkpoint.hidden_dim,
             num_encoder_layers=checkpoint.residue_layers,
             dropout=checkpoint.dropout,
+            min_sequence_separation=checkpoint.min_sequence_separation,
         )
     else:
         model = RelationalScoreModel(

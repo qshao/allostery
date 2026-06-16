@@ -42,6 +42,7 @@ def score_influence_trajectory(
     normalize: bool = False,
     batch_size: int = 8,
     device: str = 'cpu',
+    min_sequence_separation: int = 1,
 ) -> list[InfluencePairScore]:
     trajectory = load_trajectory(Path(pdb_path), topology_path=topology_path)
     samples = build_influence_samples(

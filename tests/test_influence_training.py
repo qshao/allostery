@@ -149,3 +149,35 @@ def test_plateau_scheduler_runs_with_validation(fixture_path) -> None:
         batch_size=1, lr_scheduler='plateau',
     )
     assert result.num_samples > 0
+
+
+def test_train_influence_model_respects_min_sequence_separation(fixture_path: Path) -> None:
+    result = train_influence_model(
+        pdb_path=fixture_path / 'tiny_trajectory.pdb',
+        window_size=3, stride=1, time_step=1.0,
+        hidden_dim=8, num_encoder_layers=1, dropout=0.0,
+        epochs=1, learning_rate=1e-3, sparsity_weight=0.0,
+        validation_fraction=0.0, patience=0, seed=0, device='cpu',
+        batch_size=1, min_sequence_separation=1,
+    )
+    assert result.num_samples >= 1
+
+
+def test_train_influence_model_saves_min_sequence_separation_in_checkpoint(
+    fixture_path: Path, tmp_path: Path
+) -> None:
+    from allostery.io.checkpoint import load_checkpoint
+
+    checkpoint_path = tmp_path / 'influence_sep.pt'
+    train_influence_model(
+        pdb_path=fixture_path / 'tiny_trajectory.pdb',
+        window_size=3, stride=1, time_step=1.0,
+        hidden_dim=8, num_encoder_layers=1, dropout=0.0,
+        epochs=1, learning_rate=1e-3, sparsity_weight=0.0,
+        validation_fraction=0.0, patience=0, seed=0, device='cpu',
+        batch_size=1, min_sequence_separation=1,
+        checkpoint_path=checkpoint_path,
+    )
+
+    ckpt = load_checkpoint(checkpoint_path)
+    assert ckpt.min_sequence_separation == 1

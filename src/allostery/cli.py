@@ -116,6 +116,7 @@ def _run_train(config: AppConfig) -> TrainResult:
             hidden_dim=config.model.hidden_dim,
             num_encoder_layers=config.model.residue_layers,
             dropout=config.model.dropout,
+            min_sequence_separation=max(config.data.min_sequence_separation, 1),
             epochs=training.epochs,
             learning_rate=training.learning_rate,
             sparsity_weight=training.sparsity_weight,
@@ -215,6 +216,7 @@ def _run_score(config: AppConfig) -> int:
             preprocess=config.data.preprocess,
             normalize=bool(snapshot.get('normalize', False)),
             device=config.training.device if config.training else 'cpu',
+            min_sequence_separation=max(config.data.min_sequence_separation, 1),
         )
     elif config.model.family == 'cri':
         scores = score_cri_trajectory(
