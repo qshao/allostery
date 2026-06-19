@@ -92,6 +92,8 @@ def _render_interpretation(item: dict[str, Any]) -> list[str]:
     interp = item.get("interpretation")
     if not interp:
         return []
+    if interp.get("invalid"):
+        return ["  - **Interpretation**: LLM response was invalid; see `interpretation.raw` in JSON."]
     lines = [f"  - **Interpretation** (confidence: {interp.get('confidence', 'n/a')}, "
              f"parametric: {interp.get('parametric', 'n/a')}): {interp.get('summary', '')}"]
     if interp.get("mechanism_hypothesis"):

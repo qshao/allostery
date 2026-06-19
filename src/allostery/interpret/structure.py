@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 import numpy as np
 
@@ -20,7 +21,7 @@ class StructuralContext:
     label_to_index: dict[str, int]
     contact_cutoff: float
 
-    def geometry(self, labels: list[str]) -> dict[str, float]:
+    def geometry(self, labels: list[str]) -> dict[str, Any]:
         indices = [self.label_to_index[label] for label in labels if label in self.label_to_index]
         if not indices:
             return {"radius_of_gyration": 0.0, "n_resolved": 0}
