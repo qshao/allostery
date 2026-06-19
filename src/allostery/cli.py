@@ -13,12 +13,13 @@ from allostery.pipeline.cri_score import score_cri_trajectory
 from allostery.pipeline.cri_train import train_cri_model
 from allostery.pipeline.influence_score import score_influence_trajectory
 from allostery.pipeline.influence_train import train_influence_model
+from allostery.pipeline.interpret import run_interpretation
 from allostery.io.checkpoint import load_checkpoint
 from allostery.pipeline.score import build_scoring_model, load_scoring_model, score_trajectory
 from allostery.pipeline.train import TrainResult, train_model
 
 
-_SUBCOMMANDS = frozenset({'run', 'analyze', 'check'})
+_SUBCOMMANDS = frozenset({'run', 'analyze', 'check', 'interpret'})
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -47,6 +48,21 @@ def build_parser() -> argparse.ArgumentParser:
                                 help='Number of shortest paths to report (default 5)')
     analyze_parser.add_argument('--top-hubs', type=int, default=10,
                                 help='Number of hub residues to report (default 10)')
+
+    interpret_parser = subparsers.add_parser(
+        'interpret', help='Extract candidate allosteric networks and interpret a scores CSV')
+    interpret_parser.add_argument('scores_csv', help='Path to scores CSV produced by a pipeline run')
+    interpret_parser.add_argument('--pdb', default=None, help='Reference structure/trajectory for structural context')
+    interpret_parser.add_argument('--topology', default=None, help='Topology file for non-PDB trajectories')
+    interpret_parser.add_argument('--top-k', type=int, default=20, help='Edges to include when building the graph')
+    interpret_parser.add_argument('--top-paths', type=int, default=5, help='Candidate pathways to report')
+    interpret_parser.add_argument('--top-hubs', type=int, default=10, help='Hub residues to report')
+    interpret_parser.add_argument('--out-json', default=None, help='Output JSON path (default: <scores>.interpret.json)')
+    interpret_parser.add_argument('--out-md', default=None, help='Output markdown path (default: <scores>.interpret.md)')
+    interpret_parser.add_argument('--llm', default='none', choices=['none', 'ollama', 'anthropic', 'openai'],
+                                  help='LLM backend for interpretation (default: none)')
+    interpret_parser.add_argument('--llm-model', default=None, help='Model name for the chosen backend')
+    interpret_parser.add_argument('--llm-base-url', default=None, help='Base URL (Ollama; default http://localhost:11434)')
 
     return parser
 
@@ -80,6 +96,28 @@ def main(argv: Sequence[str] | None = None) -> int:
             top_hubs=args.top_hubs,
         )
         print(report)
+        return 0
+
+    # Dispatch: subcommand 'interpret'
+    if args.command == 'interpret':
+        scores_path = Path(args.scores_csv)
+        out_json = args.out_json or scores_path.with_suffix('.interpret.json')
+        out_md = args.out_md or scores_path.with_suffix('.interpret.md')
+        report = run_interpretation(
+            scores_path,
+            out_json=out_json,
+            out_md=out_md,
+            pdb_path=args.pdb,
+            topology_path=args.topology,
+            top_k=args.top_k,
+            top_paths=args.top_paths,
+            top_hubs=args.top_hubs,
+            llm=args.llm,
+            llm_model=args.llm_model,
+            llm_base_url=args.llm_base_url,
+        )
+        counts = {key: len(value) for key, value in report['candidates'].items()}
+        print(f'interpret candidates={counts} json={out_json} md={out_md}')
         return 0
 
     # Dispatch: subcommand 'run'
