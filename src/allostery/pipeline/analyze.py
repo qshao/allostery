@@ -12,6 +12,7 @@ def run_network_analysis(
     sink: str | None = None,
     top_paths: int = 5,
     top_hubs: int = 10,
+    out_path: str | Path | None = None,
 ) -> str:
     """Read a scores CSV, build the allosteric network, and return a text report."""
     rows = read_scores_csv(scores_csv)
@@ -21,13 +22,18 @@ def run_network_analysis(
             "No edges in the network after top-k filtering; increase --top-k "
             "or check the scores CSV."
         )
-    return format_report(
+    report = format_report(
         net,
         source_label=source,
         sink_label=sink,
         top_hubs=top_hubs,
         top_paths=top_paths,
     )
+    if out_path is not None:
+        out_path = Path(out_path)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text(report, encoding="utf-8")
+    return report
 
 
 __all__ = ["run_network_analysis"]
