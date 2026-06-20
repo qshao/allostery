@@ -12,6 +12,7 @@ from allostery.config import AppConfig, load_config
 from allostery.pipeline.analyze import run_network_analysis
 from allostery.pipeline.execute import run_scoring, run_training
 from allostery.pipeline.interpret import run_interpretation
+from allostery.pipeline.progress import TrainingProgress
 from allostery.pipeline.workflow import run_workflow
 from allostery.validation.harness import (
     ValidationConfig,
@@ -164,8 +165,11 @@ def _dispatch(args: argparse.Namespace) -> Result:
         import sys as _sys
         config = load_config(args.config_path)
         emit_progress = not args.json and not args.quiet
-        progress = (lambda stage: print(f'[{stage}] ...', file=_sys.stderr)) if emit_progress else None
-        return run_workflow(config, progress=progress)
+        stage_progress = (lambda stage: print(f'[{stage}] ...', file=_sys.stderr)) if emit_progress else None
+        total_epochs = config.training.epochs if config.training and config.mode in {'train', 'run'} else 0
+        with TrainingProgress(total_epochs, quiet=not emit_progress) as tp:
+            result = run_workflow(config, progress=stage_progress, training_progress_fn=tp.update)
+        return result
 
     if args.command == 'check':
         config = load_config(args.config_path)
@@ -220,7 +224,14 @@ def _dispatch(args: argparse.Namespace) -> Result:
     lines: list[str] = []
     artifacts: list[Path] = []
     if config.mode in {'train', 'run'}:
-        result = run_training(config)
+        total_epochs = config.training.epochs if config.training else 0
+        quiet = args.quiet or args.json
+        with TrainingProgress(total_epochs, quiet=quiet) as tp:
+            result = run_training(config, progress_fn=tp.update)
+        tp.finish(
+            best_epoch=getattr(result, 'best_epoch', None),
+            best_val_loss=getattr(result, 'best_validation_loss', None),
+        )
         lines.append(f'trained samples={result.num_samples} checkpoint={config.output.model_path}')
         if config.output.model_path is not None:
             artifacts.append(config.output.model_path)

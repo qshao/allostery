@@ -15,7 +15,7 @@ from allostery.pipeline.score import build_scoring_model, score_trajectory
 from allostery.pipeline.train import train_model
 
 
-def run_training(config: AppConfig) -> Any:
+def run_training(config: AppConfig, *, progress_fn=None) -> Any:
     training = config.training
     model_path = config.output.model_path
     if training is None or model_path is None:
@@ -50,6 +50,7 @@ def run_training(config: AppConfig) -> Any:
             lr_scheduler=training.lr_scheduler,
             residue_chunk_size=config.model.residue_chunk_size,
             deterministic=training.deterministic,
+            progress_fn=progress_fn,
         )
 
     if config.model.family == 'cri':
@@ -78,6 +79,7 @@ def run_training(config: AppConfig) -> Any:
             verbose=training.verbose,
             checkpoint_path=model_path,
             config_snapshot=serialize_config(config),
+            progress_fn=progress_fn,
         )
 
     return train_model(
@@ -101,6 +103,7 @@ def run_training(config: AppConfig) -> Any:
         verbose=training.verbose,
         checkpoint_path=model_path,
         config_snapshot=serialize_config(config),
+        progress_fn=progress_fn,
     )
 
 

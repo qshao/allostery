@@ -26,6 +26,7 @@ def run_workflow(
     *,
     backend=None,
     progress: Callable[[str], None] | None = None,
+    training_progress_fn=None,
 ) -> Result:
     stages: list[str] = []
     artifacts: list[Path] = []
@@ -44,7 +45,7 @@ def run_workflow(
 
     if config.mode in {'train', 'run'}:
         step('train')
-        result = run_training(config)
+        result = run_training(config, progress_fn=training_progress_fn)
         summary.append(f'trained samples={result.num_samples} checkpoint={config.output.model_path}')
         if config.output.model_path is not None:
             artifacts.append(config.output.model_path)
