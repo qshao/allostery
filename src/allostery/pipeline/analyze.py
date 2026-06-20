@@ -28,7 +28,12 @@ def run_network_analysis(
     """Read a scores CSV, build the allosteric network, and return a text report."""
     rows = read_scores_csv(scores_csv)
     all_scores = [float(r["score"]) for r in rows]
-    threshold_score, threshold_rank = detect_threshold(all_scores)
+    top_k_scores = all_scores[:top_k]
+    if not top_k_scores:
+        raise ValueError(
+            "No top-k scores available; increase --top-k or check the scores CSV."
+        )
+    threshold_score, threshold_rank = detect_threshold(top_k_scores)
 
     net = build_graph(rows, top_k=top_k)
     if net.num_nodes == 0:
@@ -39,7 +44,7 @@ def run_network_analysis(
 
     threshold_line = (
         f"Suggested threshold: {threshold_score:.4f}"
-        f" (top {threshold_rank} of {len(all_scores)} pairs"
+        f" (top {threshold_rank} of {len(top_k_scores)} scored pairs"
         f" — largest gap at rank {threshold_rank})"
     )
     body = format_report(
