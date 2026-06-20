@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
 from typing import Sequence
 
@@ -12,9 +13,15 @@ from allostery.pipeline.analyze import run_network_analysis
 from allostery.pipeline.execute import run_scoring, run_training
 from allostery.pipeline.interpret import run_interpretation
 from allostery.pipeline.workflow import run_workflow
+from allostery.validation.harness import (
+    ValidationConfig,
+    render_validation_table,
+    run_validation,
+    validation_report_to_dict,
+)
 
 
-_SUBCOMMANDS = frozenset({'run', 'analyze', 'check', 'interpret', 'workflow'})
+_SUBCOMMANDS = frozenset({'run', 'analyze', 'check', 'interpret', 'workflow', 'validate'})
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -70,6 +77,21 @@ def build_parser() -> argparse.ArgumentParser:
         'workflow', help='Run train/score then analyze+interpret end to end from one config')
     workflow_parser.add_argument('config_path', help='Path to YAML config file')
 
+    validate_parser = subparsers.add_parser(
+        'validate',
+        help='Measure scorer accuracy against synthetic planted-coupling ground truth')
+    validate_parser.add_argument(
+        '--scorers', default=None,
+        help='Comma-separated scorers (default: all). '
+             'Choices: dccm,mi,contact,null,influence,cri,relational')
+    validate_parser.add_argument('--n-residues', type=int, default=24)
+    validate_parser.add_argument('--couplings', type=int, default=8)
+    validate_parser.add_argument('--noise', type=float, default=0.05)
+    validate_parser.add_argument('--frames', type=int, default=128)
+    validate_parser.add_argument('--seeds', type=int, default=3)
+    validate_parser.add_argument('--seed', type=int, default=0)
+    validate_parser.add_argument('--out-json', default=None, help='Write the full JSON report here')
+
     return parser
 
 
@@ -111,6 +133,33 @@ def _emit(result: Result, args: argparse.Namespace) -> None:
 
 
 def _dispatch(args: argparse.Namespace) -> Result:
+    if args.command == 'validate':
+        scorers = None
+        if args.scorers:
+            scorers = [name.strip() for name in args.scorers.split(',') if name.strip()]
+        config = ValidationConfig(
+            n_residues=args.n_residues,
+            n_couplings=args.couplings,
+            noise=args.noise,
+            frames=args.frames,
+            seeds=args.seeds,
+            base_seed=args.seed,
+        )
+        report = run_validation(config, scorers=scorers)
+        data = validation_report_to_dict(report)
+        artifacts: list[Path] = []
+        if args.out_json:
+            out_json = Path(args.out_json)
+            out_json.parent.mkdir(parents=True, exist_ok=True)
+            out_json.write_text(json.dumps(data, indent=2), encoding='utf-8')
+            artifacts.append(out_json)
+        return Result(
+            command='validate',
+            summary=render_validation_table(report),
+            data=data,
+            artifacts=artifacts,
+        )
+
     if args.command == 'workflow':
         import sys as _sys
         config = load_config(args.config_path)
