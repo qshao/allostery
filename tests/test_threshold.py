@@ -6,10 +6,10 @@ from allostery.network import detect_threshold, format_score_histogram
 
 
 def test_detect_threshold_step_function() -> None:
-    # Clear drop between rank 3 and rank 4 — knee should be at rank ≤ 3
+    # Clear drop between rank 3 and rank 4 — knee must NOT be at rank 1 (highest score)
     scores = [0.9, 0.85, 0.8, 0.1, 0.05, 0.02]
-    _t, rank = detect_threshold(scores)
-    assert 1 <= rank <= 3
+    t, rank = detect_threshold(scores)
+    assert 2 <= rank <= 4  # must NOT be rank 1 (highest score)
 
 
 def test_detect_threshold_returns_score_at_knee() -> None:
@@ -72,3 +72,14 @@ def test_format_score_histogram_uniform_scores() -> None:
     hist = format_score_histogram(scores, bins=5)
     assert "Score Distribution" in hist
     assert "all scores equal" in hist
+
+
+def test_detect_threshold_empty_raises() -> None:
+    with pytest.raises(ValueError, match="empty"):
+        detect_threshold([])
+
+
+def test_format_score_histogram_empty() -> None:
+    hist = format_score_histogram([])
+    assert "Score Distribution" in hist
+    assert "0 pairs" in hist

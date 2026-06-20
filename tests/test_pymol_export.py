@@ -30,7 +30,7 @@ def test_write_pymol_script_loads_pdb(tmp_path: Path) -> None:
         top_pairs=[],
     )
     content = pml.read_text()
-    assert f"load {pdb.resolve()}" in content
+    assert f'load "{pdb.resolve()}"' in content
 
 
 def test_write_pymol_script_contains_alter_and_spectrum(tmp_path: Path) -> None:
@@ -90,3 +90,17 @@ def test_write_pymol_script_no_path_edges_omits_path_lines(tmp_path: Path) -> No
     content = pml.read_text()
     assert "path_" not in content
     assert "cyan" not in content
+
+
+def test_write_pymol_script_quotes_pdb_path_with_spaces(tmp_path: Path) -> None:
+    pml = tmp_path / "out.pml"
+    pdb = Path("/path/with spaces/protein.pdb")
+    write_pymol_script(
+        pml_path=pml,
+        pdb_path=pdb,
+        node_labels=["A:1 GLY"],
+        centrality={0: 1.0},
+        top_pairs=[],
+    )
+    content = pml.read_text()
+    assert f'load "{pdb.resolve()}"' in content

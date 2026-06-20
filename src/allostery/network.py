@@ -76,11 +76,13 @@ def detect_threshold(scores: list[float]) -> tuple[float, int]:
     """
     arr = np.array(sorted(scores, reverse=True), dtype=float)
     n = len(arr)
+    if n == 0:
+        raise ValueError("scores list must not be empty")
     if n < 3 or arr[0] == arr[-1]:
         return float(arr[0]), 1
     x = np.arange(n, dtype=float) / (n - 1)
     y = (arr - arr[-1]) / (arr[0] - arr[-1])
-    k = int(np.argmax(y - x))
+    k = int(np.argmax(y + x - 1))
     return float(arr[k]), k + 1
 
 
@@ -95,6 +97,8 @@ def format_score_histogram(
     If threshold_rank is given, marks the bin containing that rank with '▶ threshold'.
     """
     arr = np.array(scores, dtype=float)
+    if len(arr) == 0:
+        return "=== Score Distribution (0 pairs) ===\n(no scores)"
     mn, mx = float(arr.min()), float(arr.max())
     header = f"=== Score Distribution ({len(scores)} pairs) ==="
     if mn == mx:
