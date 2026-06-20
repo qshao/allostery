@@ -376,52 +376,87 @@ print(f"Saved: {FIGURES_DIR / 'network_graph_w5.png'}")\
 ## Step 5: Multi-timescale comparison
 
 The `window_size` parameter controls which **timescale of dynamics** the model \
-captures. Pairs of window sizes reveal different layers of the allosteric mechanism.
+captures. Eight window sizes were trained on KRAS WT, spanning 0.6 ns to 15 ns. \
+All pre-computed score files are included in the repository.
 
-| Window | Duration | Dynamics captured |
-|--------|----------|-------------------|
-| w5     | 1 ns     | Fast backbone fluctuations, Switch I jitter |
-| w25    | 5 ns     | Slow collective motions, α3 helix breathing |
+| Config | Duration | Ind. samples | Dynamics captured |
+|--------|----------|:------------:|-------------------|
+| w3     | 0.6 ns   | ~1667        | Sub-ns backbone vibrations |
+| w5     | 1 ns     | ~1000        | Fast backbone fluctuations, Switch I jitter |
+| w10    | 2 ns     | ~500         | Early cooperative motions |
+| w15    | 3 ns     | ~333         | Switch region dynamics |
+| w25    | 5 ns     | ~200         | Slow collective motions, α3 helix breathing |
+| w35    | 7 ns     | ~142         | Intermediate collective motions |
+| w50    | 10 ns    | ~100         | Slow lobe motions (marginal statistics) |
+| w75    | 15 ns    | ~66          | Very slow collective dynamics (marginal statistics) |
 
-Run `scripts/train.sh configs/kras_wt_w25.yaml` to train the 5 ns model \
-(pre-computed scores are already included).\
+> **Statistical reliability:** each window needs ≥ 100 independent samples. \
+For 5001 frames at 200 ps/frame, w50 (100 samples) is the practical limit; \
+w75 (66 samples) should be interpreted with caution.\
 """),
 
         code("""\
-scores_w25 = Path("outputs/kras_wt_w25/influence_scores.csv")
-assert scores_w25.exists(), (
-    f"w25 scores not found: {scores_w25}\\n"
-    "Run: ./scripts/train.sh configs/kras_wt_w25.yaml"
-)
+# Known allosteric residues (red); terminal residues (grey = artefact candidates)
+ALLOSTERIC = {"A:48 GLY", "A:121 PRO", "A:122 SER", "A:79 LEU"}
+TERMINI    = {"A:169 LYS", "A:1 MET"}
 
-hubs_w25 = hub_centrality(scores_w25)
+windows = [
+    ("w3\\n0.6 ns",  Path("outputs/kras_wt_w3/influence_scores.csv")),
+    ("w5\\n1 ns",    Path("outputs/kras_wt/influence_scores.csv")),
+    ("w10\\n2 ns",   Path("outputs/kras_wt_w10/influence_scores.csv")),
+    ("w15\\n3 ns",   Path("outputs/kras_wt_w15/influence_scores.csv")),
+    ("w25\\n5 ns",   Path("outputs/kras_wt_w25/influence_scores.csv")),
+    ("w35\\n7 ns",   Path("outputs/kras_wt_w35/influence_scores.csv")),
+    ("w50\\n10 ns",  Path("outputs/kras_wt_w50/influence_scores.csv")),
+    ("w75\\n15 ns",  Path("outputs/kras_wt_w75/influence_scores.csv")),
+]
 
-fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(13, 5))
+fig, axes = plt.subplots(1, len(windows), figsize=(22, 6), sharey=False)
 
-def _plot_hubs(ax, hubs, title):
-    labels = [h[0] for h in hubs]
-    values = [h[1] for h in hubs]
-    colors = ["#e74c3c" if v > 0.05 else "#bdc3c7" for v in values]
-    ax.barh(labels[::-1], values[::-1], color=colors[::-1])
-    ax.set_xlabel("Betweenness centrality")
-    ax.set_title(title)
+for ax, (label, path) in zip(axes, windows):
+    assert path.exists(), f"Scores not found: {path}\\nRun: ./scripts/train.sh configs/kras_wt_{label.split(chr(10))[0]}.yaml"
+    ranked = hub_centrality(path, top_k=30)
+    residues = [h[0] for h in ranked]
+    values   = [h[1] for h in ranked]
+    colors = [
+        "#c0392b" if r in ALLOSTERIC else
+        "#95a5a6" if r in TERMINI    else
+        "#2980b9"
+        for r in residues
+    ]
+    ax.barh(residues[::-1], values[::-1], color=colors[::-1])
     ax.set_xlim(0, 1)
+    ax.set_xlabel("Centrality", fontsize=8)
+    ax.set_title(label, fontsize=9, fontweight="bold")
+    ax.tick_params(axis="y", labelsize=7)
+    ax.tick_params(axis="x", labelsize=7)
 
-_plot_hubs(ax1, hubs_w5,  "window_size=5  (1 ns)")
-_plot_hubs(ax2, hubs_w25, "window_size=25 (5 ns)")
-fig.suptitle("Hub residues: fast vs slow dynamics", fontsize=13, fontweight="bold")
+fig.suptitle(
+    "Hub residues across timescales — KRAS WT GDP-bound\\n"
+    "Red = known allosteric region  |  Grey = terminus (artefact candidate)  |  Blue = other",
+    fontsize=11, fontweight="bold",
+)
 fig.tight_layout()
-fig.savefig(FIGURES_DIR / "hub_comparison_w5_w25.png", dpi=150)
+fig.savefig(FIGURES_DIR / "hub_comparison_all_windows.png", dpi=150, bbox_inches="tight")
 plt.show()
-print(f"Saved: {FIGURES_DIR / 'hub_comparison_w5_w25.png'}")
+print(f"Saved: {FIGURES_DIR / 'hub_comparison_all_windows.png'}")\
+"""),
 
-# Print interpretation
-top_w5  = hubs_w5[0][0]
-top_w25 = hubs_w25[0][0]
-print(f"\\nw5  top hub : {top_w5}  (fast Switch I fluctuations)")
-print(f"w25 top hub : {top_w25}  (slow α3-helix collective motion)")
-print("\\nInterpretation: the allosteric signal propagates")
-print(f"  {top_w5} (Switch I hinge) → {top_w25} (α3 helix) → effector interface")\
+        md("""\
+### Interpretation
+
+| Timescale | Top hub | Biology |
+|-----------|---------|---------|
+| 1–3 ns (w5–w15) | **GLY48** (Switch I) | Fast hinge — backbone flexibility at the nucleotide-binding loop; the fastest allosteric signal carrier |
+| 5 ns (w25) | **PRO121** (α3 helix) | Slow collective lobe motion; direct effector-interface coupling residue |
+| 15 ns (w75) | **SER122** (α3 helix) | Neighbour of PRO121 — consistent with α3 helix as the slow-timescale hub |
+| 0.6 ns (w3), 7 ns (w35) | **LYS169 / MET1** | C- and N-termini — likely free-terminal artefact, not true allosteric coupling |
+
+**Implied pathway:** GLY48 (Switch I hinge) → PRO121/SER122 (α3 helix) → effector interface
+
+The model identifies **two mechanistic layers**:
+- A fast (1–3 ns) Switch I flexibility hub that rapidly samples conformational states
+- A slow (5–15 ns) α3-helix hub that transmits the accumulated signal to the effector surface\
 """),
 
         # ── §7 Next steps ────────────────────────────────────────────────────
