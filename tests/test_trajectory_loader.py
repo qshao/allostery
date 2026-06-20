@@ -87,3 +87,127 @@ def test_train_influence_accepts_topology_path_kwarg(fixture_path: Path) -> None
         topology_path=None,
     )
     assert result.num_samples >= 1
+
+
+def test_mdtraj_chain_id_none_single_chain_becomes_A(tmp_path: Path) -> None:
+    import numpy as np
+    from unittest.mock import MagicMock
+    from allostery.io.trajectory import _load_via_mdtraj
+
+    mock_chain = MagicMock()
+    mock_chain.chain_id = None
+    mock_chain.index = 0
+
+    mock_residue = MagicMock()
+    mock_residue.chain = mock_chain
+    mock_residue.resSeq = 1
+    mock_residue.name = "MET"
+
+    mock_atom = MagicMock()
+    mock_atom.residue = mock_residue
+
+    mock_topology = MagicMock()
+    mock_topology.select.return_value = [0]
+    mock_topology.atoms = [mock_atom]
+
+    mock_ca_traj = MagicMock()
+    mock_ca_traj.topology = mock_topology
+    mock_ca_traj.xyz = np.zeros((1, 1, 3), dtype=float)
+
+    mock_traj = MagicMock()
+    mock_traj.topology = mock_topology
+    mock_traj.atom_slice.return_value = mock_ca_traj
+
+    import mdtraj as _mdt_mod
+    real_load = _mdt_mod.load
+    _mdt_mod.load = lambda *a, **kw: mock_traj
+
+    try:
+        result = _load_via_mdtraj(tmp_path / "traj.trr", tmp_path / "top.gro")
+    finally:
+        _mdt_mod.load = real_load
+
+    assert result.residues[0].chain_id == "A"
+
+
+def test_mdtraj_chain_id_none_second_chain_becomes_B(tmp_path: Path) -> None:
+    import numpy as np
+    from unittest.mock import MagicMock
+    from allostery.io.trajectory import _load_via_mdtraj
+
+    def _make_mock_atom(chain_index: int, resseq: int) -> MagicMock:
+        mock_chain = MagicMock()
+        mock_chain.chain_id = None
+        mock_chain.index = chain_index
+        mock_residue = MagicMock()
+        mock_residue.chain = mock_chain
+        mock_residue.resSeq = resseq
+        mock_residue.name = "ALA"
+        mock_atom = MagicMock()
+        mock_atom.residue = mock_residue
+        return mock_atom
+
+    mock_topology = MagicMock()
+    mock_topology.select.return_value = [0, 1]
+    mock_topology.atoms = [_make_mock_atom(0, 1), _make_mock_atom(1, 1)]
+
+    mock_ca_traj = MagicMock()
+    mock_ca_traj.topology = mock_topology
+    mock_ca_traj.xyz = np.zeros((1, 2, 3), dtype=float)
+
+    mock_traj = MagicMock()
+    mock_traj.topology = mock_topology
+    mock_traj.atom_slice.return_value = mock_ca_traj
+
+    import mdtraj as _mdt_mod
+    real_load = _mdt_mod.load
+    _mdt_mod.load = lambda *a, **kw: mock_traj
+
+    try:
+        result = _load_via_mdtraj(tmp_path / "traj.trr", tmp_path / "top.gro")
+    finally:
+        _mdt_mod.load = real_load
+
+    assert result.residues[0].chain_id == "A"
+    assert result.residues[1].chain_id == "B"
+
+
+def test_mdtraj_chain_id_set_is_preserved(tmp_path: Path) -> None:
+    import numpy as np
+    from unittest.mock import MagicMock
+    from allostery.io.trajectory import _load_via_mdtraj
+
+    mock_chain = MagicMock()
+    mock_chain.chain_id = "C"
+    mock_chain.index = 2
+
+    mock_residue = MagicMock()
+    mock_residue.chain = mock_chain
+    mock_residue.resSeq = 10
+    mock_residue.name = "GLY"
+
+    mock_atom = MagicMock()
+    mock_atom.residue = mock_residue
+
+    mock_topology = MagicMock()
+    mock_topology.select.return_value = [0]
+    mock_topology.atoms = [mock_atom]
+
+    mock_ca_traj = MagicMock()
+    mock_ca_traj.topology = mock_topology
+    mock_ca_traj.xyz = np.zeros((1, 1, 3), dtype=float)
+
+    mock_traj = MagicMock()
+    mock_traj.topology = mock_topology
+    mock_traj.atom_slice.return_value = mock_ca_traj
+
+    import mdtraj as _mdt_mod
+    real_load = _mdt_mod.load
+    _mdt_mod.load = lambda *a, **kw: mock_traj
+
+    try:
+        result = _load_via_mdtraj(tmp_path / "traj.trr", tmp_path / "top.gro")
+    finally:
+        _mdt_mod.load = real_load
+
+    assert result.residues[0].chain_id == "C"

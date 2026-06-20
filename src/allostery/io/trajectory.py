@@ -74,7 +74,7 @@ def _load_via_mdanalysis(path: Path, topology_path: Path) -> Trajectory:
     residues = tuple(
         ResidueRecord(
             index=i,
-            chain_id=str(atom.segid).strip() or "_",
+            chain_id=str(atom.segid).strip() or "A",
             residue_number=int(atom.resid),
             name=str(atom.resname)[:3],
         )
@@ -102,7 +102,11 @@ def _load_via_mdtraj(path: Path, topology_path: Path) -> Trajectory:
     residues = tuple(
         ResidueRecord(
             index=i,
-            chain_id=str(atom.residue.chain.chain_id),
+            chain_id=(
+                str(atom.residue.chain.chain_id)
+                if atom.residue.chain.chain_id is not None
+                else chr(ord('A') + min(atom.residue.chain.index, 25))
+            ),
             residue_number=int(atom.residue.resSeq),
             name=str(atom.residue.name)[:3],
         )
