@@ -16,6 +16,11 @@ def run_network_analysis(
     """Read a scores CSV, build the allosteric network, and return a text report."""
     rows = read_scores_csv(scores_csv)
     net = build_graph(rows, top_k=top_k)
+    if net.num_nodes == 0:
+        raise ValueError(
+            "No edges in the network after top-k filtering; increase --top-k "
+            "or check the scores CSV."
+        )
     return format_report(
         net,
         source_label=source,

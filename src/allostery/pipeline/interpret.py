@@ -29,6 +29,11 @@ def run_interpretation(
 ) -> dict[str, Any]:
     rows = read_scores_csv(scores_csv)
     net = build_graph(rows, top_k=top_k)
+    if net.num_nodes == 0:
+        raise ValueError(
+            "No edges in the network after top-k filtering; increase --top-k "
+            "or check the scores CSV."
+        )
     candidates = extract_candidates(net, rows, top_paths=top_paths, top_hubs=top_hubs)
 
     context = None
