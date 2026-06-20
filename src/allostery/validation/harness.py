@@ -24,6 +24,7 @@ from allostery.validation.metrics import ScoreMetrics, evaluate_scores
 from allostery.validation.synthetic import generate_planted_system
 
 _BASELINE_SCORERS = ("dccm", "mi", "contact", "null")
+_CLASSICAL_SCORERS = ("dccm", "mi", "contact")  # excludes shuffled-null noise floor
 _MODEL_SCORERS = ("influence", "cri", "relational")
 ALL_SCORERS = _BASELINE_SCORERS + _MODEL_SCORERS
 
@@ -233,7 +234,7 @@ def run_validation(
 
     results = [_aggregate(name, per_scorer[name]) for name in selected]
 
-    baseline_results = [r for r in results if r.name in _BASELINE_SCORERS]
+    baseline_results = [r for r in results if r.name in _CLASSICAL_SCORERS]
     best_baseline = (
         max(baseline_results, key=lambda r: r.roc_auc_mean).name
         if baseline_results
@@ -313,6 +314,7 @@ def validation_report_to_dict(report: ValidationReport) -> dict[str, Any]:
 __all__ = [
     "ALL_SCORERS",
     "_BASELINE_SCORERS",
+    "_CLASSICAL_SCORERS",
     "_MODEL_SCORERS",
     "ScorerResult",
     "ValidationConfig",
