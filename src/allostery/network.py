@@ -7,6 +7,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterator
 
+import numpy as np
+
 
 @dataclass
 class AllostericNetwork:
@@ -64,6 +66,61 @@ def read_scores_csv(path: str | Path) -> list[dict[str, str]]:
                 f"Row {row_num}: 'score' must be a number, got {row['score']!r}"
             )
     return rows
+
+
+def detect_threshold(scores: list[float]) -> tuple[float, int]:
+    """Find the knee of the sorted-score curve using the Kneedle method.
+
+    Returns (threshold_score, 1-based_rank). For < 3 scores or a flat curve,
+    returns the highest score at rank 1.
+    """
+    arr = np.array(sorted(scores, reverse=True), dtype=float)
+    n = len(arr)
+    if n < 3 or arr[0] == arr[-1]:
+        return float(arr[0]), 1
+    x = np.arange(n, dtype=float) / (n - 1)
+    y = (arr - arr[-1]) / (arr[0] - arr[-1])
+    k = int(np.argmax(y - x))
+    return float(arr[k]), k + 1
+
+
+def format_score_histogram(
+    scores: list[float],
+    *,
+    bins: int = 10,
+    threshold_rank: int | None = None,
+) -> str:
+    """Return an ASCII bar chart of the score distribution.
+
+    If threshold_rank is given, marks the bin containing that rank with '▶ threshold'.
+    """
+    arr = np.array(scores, dtype=float)
+    mn, mx = float(arr.min()), float(arr.max())
+    header = f"=== Score Distribution ({len(scores)} pairs) ==="
+    if mn == mx:
+        return f"{header}\n(all scores equal: {mn:.4f})"
+
+    counts, edges = np.histogram(arr, bins=bins)
+    max_count = int(counts.max()) or 1
+    bar_width = 20
+
+    threshold_bin_idx: int | None = None
+    if threshold_rank is not None:
+        sorted_desc = np.sort(arr)[::-1]
+        t_score = float(sorted_desc[min(threshold_rank - 1, len(sorted_desc) - 1)])
+        raw = int((t_score - mn) / (mx - mn) * bins)
+        threshold_bin_idx = max(0, min(bins - 1, raw))
+
+    lines = [header]
+    for i in range(bins - 1, -1, -1):
+        lo = float(edges[i])
+        hi = float(edges[i + 1])
+        count = int(counts[i])
+        filled = int(bar_width * count / max_count)
+        bar = "█" * filled + " " * (bar_width - filled)
+        marker = "  ▶ threshold" if threshold_bin_idx is not None and i == threshold_bin_idx else ""
+        lines.append(f"{lo:.2f}–{hi:.2f} |{bar}|  {count}{marker}")
+    return "\n".join(lines)
 
 
 def build_graph(rows: list[dict[str, str]], top_k: int = 20) -> AllostericNetwork:
@@ -376,8 +433,10 @@ __all__ = [
     "betweenness_centrality",
     "channel_summary",
     "connected_components",
+    "detect_threshold",
     "dijkstra",
     "format_report",
+    "format_score_histogram",
     "hub_summary",
     "network_summary",
     "read_scores_csv",
