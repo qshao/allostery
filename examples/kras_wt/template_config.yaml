@@ -1,0 +1,33 @@
+mode: run
+
+data:
+  pdb_path: /path/to/trajectory.trr    # <-- SET THIS (.trr, .xtc, .dcd, or multi-model .pdb)
+  topology_path: /path/to/topology.gro # <-- SET THIS (.gro, .tpr, .psf; omit for .pdb)
+  window_size: 25     # frames; window_size × time_step = window duration (ps)
+  horizon_size: 1
+  stride: 1
+  time_step: 200.0    # <-- SET THIS: ps per saved frame (check your MD output frequency)
+  preprocess: align   # align removes rigid-body rotation/translation (recommended)
+
+model:
+  family: influence
+  hidden_dim: 64
+  residue_layers: 2
+  pair_layers: 1
+  dropout: 0.1
+
+training:
+  epochs: 100
+  learning_rate: 0.001
+  sparsity_weight: 0.01
+  consistency_weight: 0.0
+  validation_fraction: 0.1
+  patience: 20
+  device: cuda        # <-- SET TO cpu if no GPU available
+
+scoring:
+  top_k: 30           # top-k scored pairs used as network edges
+
+output:
+  model_path: outputs/my_protein/influence_model.pt       # <-- SET THIS
+  score_csv_path: outputs/my_protein/influence_scores.csv # <-- SET THIS
