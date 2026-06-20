@@ -83,6 +83,7 @@ allostery check <config.yaml>            # validate config without running anyth
 allostery analyze <scores.csv> [options] # post-process: network + channels
 allostery interpret <scores.csv> [opts]  # candidate allosteric networks + optional LLM interpretation
 allostery workflow <config.yaml>         # run -> analyze -> interpret end to end from one config
+allostery validate [options]             # measure scorer accuracy vs. synthetic ground truth
 allostery --version                      # print version and exit
 
 # Global flags (before the subcommand):
@@ -130,6 +131,28 @@ interpret:
 ```bash
 allostery workflow config.yaml
 ```
+
+### Validate
+
+Measure how well each scorer recovers *known* residue–residue coupling. The harness
+generates synthetic trajectories from a planted coupling graph (exact ground truth),
+runs classical baselines (DCCM, mutual information, contact frequency) alongside a
+shuffled-trajectory null and the three model families, and reports ranking metrics
+(ROC-AUC, PR-AUC, precision@k) averaged over seeds:
+
+```bash
+# Baselines only, fast
+allostery validate --scorers dccm,mi,contact,null --seeds 5
+
+# Full comparison including the trained model families
+allostery validate --n-residues 24 --couplings 8 --seeds 3
+
+# Machine-readable report for scripting / CI
+allostery --json validate --out-json outputs/validation.json
+```
+
+The report flags whether each model family beats the best classical baseline — a method
+is only meaningful if it outperforms trivial correlation on ground truth.
 
 ### Pipeline (run)
 
