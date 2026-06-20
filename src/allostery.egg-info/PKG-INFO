@@ -1,0 +1,15 @@
+Metadata-Version: 2.4
+Name: allostery
+Version: 0.1.0
+Summary: Allostery research package
+Project-URL: Homepage, https://github.com/qshao/allostery
+Project-URL: Repository, https://github.com/qshao/allostery
+Project-URL: Changelog, https://github.com/qshao/allostery/blob/main/CHANGELOG.md
+Requires-Python: >=3.11
+License-File: LICENSE
+Requires-Dist: numpy
+Requires-Dist: torch
+Requires-Dist: PyYAML
+Provides-Extra: dev
+Requires-Dist: pytest; extra == "dev"
+Dynamic: license-file

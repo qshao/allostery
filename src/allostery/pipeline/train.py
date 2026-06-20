@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -13,8 +14,6 @@ from allostery.io.checkpoint import save_checkpoint
 from allostery.io.trajectory import load_trajectory
 from allostery.models.relational import RelationalScoreModel
 from allostery.training.objectives import TrainingLossBreakdown, consistency_loss, future_summary_loss
-from collections.abc import Callable
-
 from allostery.training.runtime import (
     BatchedRelationalSample,
     iter_batches,

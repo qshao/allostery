@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import warnings
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping
@@ -13,8 +14,6 @@ from allostery.io.checkpoint import save_checkpoint
 from allostery.io.trajectory import load_trajectory
 from allostery.models.influence import AllostericInfluenceModel
 from allostery.training.influence_objectives import InfluenceLossBreakdown, influence_loss
-from collections.abc import Callable
-
 from allostery.training.runtime import (
     iter_batches,
     resolve_device,

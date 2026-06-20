@@ -1,0 +1,2 @@
+[console_scripts]
+allostery = allostery.cli:main

@@ -1,0 +1,6 @@
+numpy
+torch
+PyYAML
+
+[dev]
+pytest
