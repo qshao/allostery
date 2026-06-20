@@ -5,9 +5,11 @@ from pathlib import Path
 from typing import Sequence
 
 from allostery import __version__
+from allostery.cli_errors import USER_ERROR, exit_code_for
+from allostery.cli_output import Result, format_result
 from allostery.config import AppConfig, load_config
 from allostery.pipeline.analyze import run_network_analysis
-from allostery.pipeline.execute import run_scoring, run_training, serialize_config
+from allostery.pipeline.execute import run_scoring, run_training
 from allostery.pipeline.interpret import run_interpretation
 
 
@@ -17,6 +19,13 @@ _SUBCOMMANDS = frozenset({'run', 'analyze', 'check', 'interpret'})
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog='allostery')
     parser.add_argument('--version', action='version', version=f'allostery {__version__}')
+    parser.add_argument('--debug', action='store_true',
+                        help='Show full tracebacks instead of a clean error message')
+    output_group = parser.add_mutually_exclusive_group()
+    output_group.add_argument('--json', action='store_true',
+                              help='Emit a single JSON object on stdout (for scripts)')
+    output_group.add_argument('--quiet', action='store_true',
+                              help='Suppress summaries; print only artifact paths')
     subparsers = parser.add_subparsers(dest='command')
 
     # Default pipeline command (config YAML)
@@ -62,22 +71,49 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: Sequence[str] | None = None) -> int:
     import sys as _sys
     effective: list[str] = list(argv) if argv is not None else _sys.argv[1:]
-    # Legacy: bare config_path with no subcommand prefix → treat as 'run config_path'
     if effective and effective[0] not in _SUBCOMMANDS and not effective[0].startswith('-'):
         effective = ['run'] + effective
     args = build_parser().parse_args(effective)
 
-    # Dispatch: subcommand 'check'
-    if args.command == 'check':
-        try:
-            config = load_config(args.config_path)
-            print(f'Config OK: mode={config.mode}, family={config.model.family}')
-            return 0
-        except Exception as exc:
-            print(str(exc), file=_sys.stderr)
-            return 1
+    try:
+        result = _dispatch(args)
+    except SystemExit:
+        raise
+    except BaseException as exc:  # noqa: BLE001 - mapped to a clean message
+        if args.debug:
+            raise
+        code = exit_code_for(exc)
+        message = str(exc) if code is not None else 'internal error; rerun with --debug for details'
+        if code is None:
+            code = USER_ERROR
+        result = Result(command=getattr(args, 'command', '') or '', status='error', error=message)
+        _emit(result, args)
+        return code
 
-    # Dispatch: subcommand 'analyze'
+    _emit(result, args)
+    return 0
+
+
+def _emit(result: Result, args: argparse.Namespace) -> None:
+    import sys as _sys
+    stdout_text, stderr_text = format_result(
+        result, json_mode=args.json, quiet=args.quiet,
+    )
+    if stdout_text:
+        print(stdout_text)
+    if stderr_text:
+        print(stderr_text, file=_sys.stderr)
+
+
+def _dispatch(args: argparse.Namespace) -> Result:
+    if args.command == 'check':
+        config = load_config(args.config_path)
+        return Result(
+            command='check',
+            summary=f'Config OK: mode={config.mode}, family={config.model.family}',
+            data={'mode': config.mode, 'family': config.model.family},
+        )
+
     if args.command == 'analyze':
         report = run_network_analysis(
             scores_csv=args.scores_csv,
@@ -87,14 +123,12 @@ def main(argv: Sequence[str] | None = None) -> int:
             top_paths=args.top_paths,
             top_hubs=args.top_hubs,
         )
-        print(report)
-        return 0
+        return Result(command='analyze', summary=report)
 
-    # Dispatch: subcommand 'interpret'
     if args.command == 'interpret':
         scores_path = Path(args.scores_csv)
-        out_json = args.out_json or scores_path.with_suffix('.interpret.json')
-        out_md = args.out_md or scores_path.with_suffix('.interpret.md')
+        out_json = Path(args.out_json) if args.out_json else scores_path.with_suffix('.interpret.json')
+        out_md = Path(args.out_md) if args.out_md else scores_path.with_suffix('.interpret.md')
         report = run_interpretation(
             scores_path,
             out_json=out_json,
@@ -109,45 +143,34 @@ def main(argv: Sequence[str] | None = None) -> int:
             llm_base_url=args.llm_base_url,
         )
         counts = {key: len(value) for key, value in report['candidates'].items()}
-        print(f'interpret candidates={counts} json={out_json} md={out_md}')
-        return 0
+        return Result(
+            command='interpret',
+            summary=f'interpret candidates={counts} json={out_json} md={out_md}',
+            data={'counts': counts},
+            artifacts=[out_json, out_md],
+        )
 
-    # Dispatch: subcommand 'run'
+    # 'run' (and the legacy bare-config form)
     config_path = getattr(args, 'config_path', None)
     if config_path is None:
         build_parser().print_help()
-        return 1
-
+        raise ValueError('no command given')
     config = load_config(config_path)
-
-    if config.mode == 'train':
-        _run_train(config)
-    elif config.mode == 'score':
-        _run_score(config)
-    else:
-        _run_run(config)
-
-    print(f'completed mode={config.mode}')
-    return 0
-
-
-def _run_train(config: AppConfig):
-    result = run_training(config)
-    print(f'trained samples={result.num_samples} checkpoint={config.output.model_path}')
-    return result
-
-
-def _run_score(config: AppConfig) -> int:
-    count = run_scoring(config)
-    scoring = config.scoring
-    print(f'scored pairs={count} csv={config.output.score_csv_path} '
-          f'top_k={scoring.top_k if scoring else 0}')
-    return count
-
-
-def _run_run(config: AppConfig) -> None:
-    _run_train(config)
-    _run_score(config)
+    lines: list[str] = []
+    artifacts: list[Path] = []
+    if config.mode in {'train', 'run'}:
+        result = run_training(config)
+        lines.append(f'trained samples={result.num_samples} checkpoint={config.output.model_path}')
+        if config.output.model_path is not None:
+            artifacts.append(config.output.model_path)
+    if config.mode in {'score', 'run'}:
+        count = run_scoring(config)
+        top_k = config.scoring.top_k if config.scoring else 0
+        lines.append(f'scored pairs={count} csv={config.output.score_csv_path} top_k={top_k}')
+        if config.output.score_csv_path is not None:
+            artifacts.append(config.output.score_csv_path)
+    lines.append(f'completed mode={config.mode}')
+    return Result(command='run', summary='\n'.join(lines), data={'mode': config.mode}, artifacts=artifacts)
 
 
 if __name__ == '__main__':
