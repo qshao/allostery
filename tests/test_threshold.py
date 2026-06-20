@@ -41,10 +41,10 @@ def test_detect_threshold_single_score() -> None:
 
 
 def test_format_score_histogram_bin_counts_sum_to_total() -> None:
-    import re
     scores = [i / 10.0 for i in range(11)]  # 11 scores 0.0–1.0
     hist = format_score_histogram(scores, bins=5)
-    counts = [int(m.group(1)) for m in re.finditer(r"(\d+) pairs", hist)]
+    bin_lines = [l for l in hist.splitlines() if "|" in l]
+    counts = [int(l.split("|")[2].split()[0]) for l in bin_lines]
     assert sum(counts) == len(scores)
 
 
