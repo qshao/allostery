@@ -58,6 +58,14 @@ def build_parser() -> argparse.ArgumentParser:
                                 help='Number of shortest paths to report (default 5)')
     analyze_parser.add_argument('--top-hubs', type=int, default=10,
                                 help='Number of hub residues to report (default 10)')
+    analyze_parser.add_argument(
+        '--pdb', default=None,
+        help='Structure file for PyMOL export (required when --out-pml is given)'
+    )
+    analyze_parser.add_argument(
+        '--out-pml', default=None,
+        help='Write a PyMOL .pml script to this path'
+    )
 
     interpret_parser = subparsers.add_parser(
         'interpret', help='Extract candidate allosteric networks and interpret a scores CSV')
@@ -180,6 +188,10 @@ def _dispatch(args: argparse.Namespace) -> Result:
         )
 
     if args.command == 'analyze':
+        out_pml = Path(args.out_pml) if args.out_pml else None
+        pdb_path = Path(args.pdb) if args.pdb else None
+        if out_pml is not None and pdb_path is None:
+            raise ValueError("--out-pml requires --pdb to specify the structure file")
         report = run_network_analysis(
             scores_csv=args.scores_csv,
             top_k=args.top_k,
@@ -187,8 +199,11 @@ def _dispatch(args: argparse.Namespace) -> Result:
             sink=args.sink,
             top_paths=args.top_paths,
             top_hubs=args.top_hubs,
+            out_pml=out_pml,
+            pdb_path=pdb_path,
         )
-        return Result(command='analyze', summary=report)
+        artifacts = [out_pml] if out_pml is not None else []
+        return Result(command='analyze', summary=report, artifacts=artifacts)
 
     if args.command == 'interpret':
         scores_path = Path(args.scores_csv)
