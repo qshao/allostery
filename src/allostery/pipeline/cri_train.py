@@ -13,6 +13,8 @@ from allostery.io.checkpoint import save_checkpoint
 from allostery.io.trajectory import load_trajectory
 from allostery.models.cri import CRILatentInteractionModel
 from allostery.training.cri_objectives import cri_loss
+from collections.abc import Callable
+
 from allostery.training.runtime import (
     BatchedCRISample,
     iter_batches,
@@ -98,6 +100,7 @@ def train_cri_model(
     checkpoint_path: str | Path | None = None,
     config_snapshot: Mapping[str, Any] | None = None,
     topology_path: str | Path | None = None,
+    progress_fn: Callable[[int, float, float | None], None] | None = None,
 ) -> CRITrainResult:
     seed_everything(seed)
     torch_device = resolve_device(device)
@@ -169,18 +172,23 @@ def train_cri_model(
                 epochs_without_improvement = 0
             else:
                 epochs_without_improvement += 1
-                if patience > 0 and epochs_without_improvement >= patience:
-                    if verbose:
-                        print(f"early stop at epoch {epoch + 1}", flush=True)
-                    break
-            if verbose:
+            if progress_fn is not None:
+                progress_fn(epoch + 1, train_loss, validation_loss)
+            elif verbose:
                 marker = "  [best]" if is_best else ""
                 print(
                     f"epoch {epoch + 1:>{width}}/{epochs}  train={train_loss:.4f}  val={validation_loss:.4f}{marker}",
                     flush=True,
                 )
-        elif verbose:
-            print(f"epoch {epoch + 1:>{width}}/{epochs}  train={train_loss:.4f}", flush=True)
+            if patience > 0 and epochs_without_improvement >= patience:
+                if progress_fn is None and verbose:
+                    print(f"early stop at epoch {epoch + 1}", flush=True)
+                break
+        else:
+            if progress_fn is not None:
+                progress_fn(epoch + 1, train_loss, None)
+            elif verbose:
+                print(f"epoch {epoch + 1:>{width}}/{epochs}  train={train_loss:.4f}", flush=True)
 
     if best_validation_loss is not None:
         model.load_state_dict(best_state)
