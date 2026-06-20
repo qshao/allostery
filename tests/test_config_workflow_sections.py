@@ -67,3 +67,32 @@ def test_bad_llm_enum_rejected(tmp_path: Path, fixture_path: Path) -> None:
 def test_lone_source_rejected(tmp_path: Path, fixture_path: Path) -> None:
     with pytest.raises(ConfigError, match="source"):
         load_config(_base(tmp_path, fixture_path, ["analyze:", "  source: A:1 GLY"]))
+
+
+def test_train_mode_with_analyze_section_rejected(tmp_path: Path, fixture_path: Path) -> None:
+    lines = [
+        "mode: train",  # train only, no scoring
+        "data:",
+        f"  pdb_path: {fixture_path / 'tiny_trajectory.pdb'}",
+        "  window_size: 3",
+        "  horizon_size: 1",
+        "  stride: 1",
+        "model:",
+        "  family: influence",
+        "  hidden_dim: 8",
+        "  residue_layers: 2",
+        "  pair_layers: 1",
+        "  dropout: 0.0",
+        "training:",
+        "  epochs: 1",
+        "  learning_rate: 0.01",
+        "  consistency_weight: 0.0",
+        "output:",
+        f"  model_path: {tmp_path / 'model.pt'}",
+        "analyze:",
+        "  top_k: 10",
+    ]
+    path = tmp_path / "cfg.yaml"
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    with pytest.raises(ConfigError, match="train"):
+        load_config(path)

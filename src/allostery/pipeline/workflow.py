@@ -91,6 +91,13 @@ def run_workflow(
     except Exception as exc:  # noqa: BLE001 - re-raised with context, artifacts preserved
         raise WorkflowError(stage=current, artifacts=artifacts, cause=exc) from exc
 
+    if not wants_post:
+        import sys as _sys
+        print(
+            "(no analyze/interpret sections configured; add them to the config for full workflow)",
+            file=_sys.stderr,
+        )
+
     summary.append(f"workflow complete (stages: {', '.join(stages)})")
     return Result(
         command='workflow',

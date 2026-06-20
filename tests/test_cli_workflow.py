@@ -55,3 +55,11 @@ def test_workflow_command_json_mode(tmp_path: Path, fixture_path: Path, capsys) 
     payload = json.loads(captured.out)
     assert payload["command"] == "workflow"
     assert payload["data"]["stages"] == ["train", "score", "interpret"]
+
+
+def test_workflow_backend_failure_exits_3(tmp_path: Path, fixture_path: Path) -> None:
+    from unittest.mock import patch
+    config = _cfg(tmp_path, fixture_path, ["interpret:", "  llm: ollama"])
+    with patch("allostery.pipeline.workflow.run_interpretation", side_effect=ImportError("backend unavailable")):
+        code = main(["workflow", str(config)])
+    assert code == 3

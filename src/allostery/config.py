@@ -445,6 +445,11 @@ def validate_config(config: AppConfig, config_file: str = "") -> None:
     if config.mode in {'score', 'run'} and config.output.score_csv_path is None:
         errors.append("output.score_csv_path is required")
 
+    if (config.analyze is not None or config.interpret is not None) and config.mode == 'train':
+        errors.append(
+            "analyze/interpret sections require scoring; set mode to 'score' or 'run', not 'train'"
+        )
+
     if config.analyze is not None:
         a = config.analyze
         if a.top_k <= 0:
