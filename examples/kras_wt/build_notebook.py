@@ -516,6 +516,51 @@ plt.show()
 print(f"Saved: {FIGURES_DIR / 'hub_comparison_all_windows.png'}")\
 """),
 
+        # ── §6b Influence matrix comparison ─────────────────────────────────
+        md("### Influence matrices across timescales"),
+
+        code("""\
+# Shared color scale: use the global maximum across all 8 windows
+all_matrices = []
+for label, path in windows:
+    assert path.exists(), f"Scores not found: {path}"
+    mat, _ = build_influence_matrix(path)
+    all_matrices.append((label, mat))
+
+vmax = max(m.max() for _, m in all_matrices)
+
+fig, axes = plt.subplots(2, 4, figsize=(18, 9))
+
+for ax, (label, matrix) in zip(axes.flatten(), all_matrices):
+    im = ax.imshow(matrix, cmap="Reds", aspect="equal",
+                   interpolation="nearest", vmin=0, vmax=vmax)
+    tick_step = 40
+    ticks = list(range(0, n, tick_step))
+    ax.set_xticks(ticks)
+    ax.set_yticks(ticks)
+    ax.set_xticklabels([res_labels[t] for t in ticks], rotation=90, fontsize=7)
+    ax.set_yticklabels([res_labels[t] for t in ticks], fontsize=7)
+    ax.set_title(label, fontsize=9, fontweight="bold")
+    for region_name, (start, end, color) in REGIONS.items():
+        s_idx = res_to_idx.get(start, start - 1)
+        e_idx = res_to_idx.get(end,   end   - 1)
+        for val in (s_idx - 0.5, e_idx + 0.5):
+            ax.axvline(val, color=color, linewidth=0.7, alpha=0.7)
+            ax.axhline(val, color=color, linewidth=0.7, alpha=0.7)
+
+fig.colorbar(im, ax=axes.ravel().tolist(), label="Influence score", shrink=0.5)
+fig.suptitle(
+    "Residue–residue influence matrices across timescales — KRAS WT GDP-bound\\n"
+    "Shared color scale  |  Blue=P-loop  Red=Switch I  Orange=Switch II  Purple=α3",
+    fontsize=11, fontweight="bold",
+)
+fig.tight_layout()
+fig.savefig(FIGURES_DIR / "influence_matrix_comparison.png", dpi=130, bbox_inches="tight")
+plt.show()
+print(f"Saved: {FIGURES_DIR / 'influence_matrix_comparison.png'}")
+print(f"Global score range: 0 – {vmax:.4f}")\
+"""),
+
         md("""\
 ### Interpretation
 
