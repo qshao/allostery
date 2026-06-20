@@ -8,6 +8,12 @@ from typing import Any
 import numpy as np
 
 from allostery.io.trajectory import load_trajectory
+from allostery.pipeline.cri_score import score_cri_trajectory
+from allostery.pipeline.cri_train import train_cri_model
+from allostery.pipeline.influence_score import score_influence_trajectory
+from allostery.pipeline.influence_train import train_influence_model
+from allostery.pipeline.score import score_trajectory
+from allostery.pipeline.train import train_model
 from allostery.validation.baselines import (
     contact_frequency_scores,
     dccm_scores,
@@ -20,6 +26,12 @@ from allostery.validation.synthetic import generate_planted_system
 _BASELINE_SCORERS = ("dccm", "mi", "contact", "null")
 _MODEL_SCORERS = ("influence", "cri", "relational")
 ALL_SCORERS = _BASELINE_SCORERS + _MODEL_SCORERS
+
+_MODEL_WINDOW = 3
+_MODEL_STRIDE = 1
+_MODEL_HIDDEN = 8
+_MODEL_EPOCHS = 2
+_MODEL_LR = 1e-2
 
 
 @dataclass(frozen=True, slots=True)
@@ -54,6 +66,95 @@ class ValidationReport:
     config: dict[str, Any] = field(default_factory=dict)
 
 
+def _score_influence(pdb_path: Path, config: ValidationConfig, seed: int) -> list[dict]:
+    result = train_influence_model(
+        pdb_path=pdb_path,
+        window_size=_MODEL_WINDOW,
+        stride=_MODEL_STRIDE,
+        time_step=1.0,
+        hidden_dim=_MODEL_HIDDEN,
+        num_encoder_layers=2,
+        dropout=0.0,
+        epochs=_MODEL_EPOCHS,
+        learning_rate=_MODEL_LR,
+        sparsity_weight=0.0,
+        min_sequence_separation=config.min_sequence_separation,
+        validation_fraction=0.0,
+        patience=0,
+        seed=seed,
+        verbose=False,
+    )
+    return score_influence_trajectory(
+        model=result.model,
+        pdb_path=pdb_path,
+        window_size=_MODEL_WINDOW,
+        stride=_MODEL_STRIDE,
+        time_step=1.0,
+        min_sequence_separation=config.min_sequence_separation,
+    )
+
+
+def _score_cri(pdb_path: Path, config: ValidationConfig, seed: int) -> list[dict]:
+    # Fully connect the graph so long-range planted couplings are reachable.
+    result = train_cri_model(
+        pdb_path=pdb_path,
+        window_size=_MODEL_WINDOW,
+        stride=_MODEL_STRIDE,
+        time_step=1.0,
+        distance_cutoff=1.0e6,
+        max_neighbors=config.n_residues,
+        edge_types=2,
+        hidden_dim=_MODEL_HIDDEN,
+        dropout=0.0,
+        epochs=_MODEL_EPOCHS,
+        learning_rate=_MODEL_LR,
+        entropy_weight=0.0,
+        no_edge_weight=0.0,
+        min_sequence_separation=config.min_sequence_separation,
+        validation_fraction=0.0,
+        patience=0,
+        seed=seed,
+        verbose=False,
+    )
+    return score_cri_trajectory(
+        model=result.model,
+        pdb_path=pdb_path,
+        window_size=_MODEL_WINDOW,
+        stride=_MODEL_STRIDE,
+        time_step=1.0,
+        distance_cutoff=1.0e6,
+        max_neighbors=config.n_residues,
+        min_sequence_separation=config.min_sequence_separation,
+    )
+
+
+def _score_relational(pdb_path: Path, config: ValidationConfig, seed: int) -> list[dict]:
+    result = train_model(
+        pdb_path=pdb_path,
+        window_size=_MODEL_WINDOW,
+        horizon_size=1,
+        stride=_MODEL_STRIDE,
+        hidden_dim=_MODEL_HIDDEN,
+        residue_layers=2,
+        pair_layers=1,
+        dropout=0.0,
+        epochs=_MODEL_EPOCHS,
+        learning_rate=_MODEL_LR,
+        consistency_weight=0.0,
+        validation_fraction=0.0,
+        patience=0,
+        seed=seed,
+        verbose=False,
+    )
+    return score_trajectory(
+        model=result.model,
+        pdb_path=pdb_path,
+        window_size=_MODEL_WINDOW,
+        horizon_size=1,
+        stride=_MODEL_STRIDE,
+    )
+
+
 def _run_one_scorer(
     name: str,
     trajectory: Any,
@@ -70,6 +171,12 @@ def _run_one_scorer(
         return contact_frequency_scores(trajectory, min_sequence_separation=sep)
     if name == "null":
         return shuffled_null_scores(trajectory, seed=seed, min_sequence_separation=sep)
+    if name == "influence":
+        return _score_influence(pdb_path, config, seed)
+    if name == "cri":
+        return _score_cri(pdb_path, config, seed)
+    if name == "relational":
+        return _score_relational(pdb_path, config, seed)
     raise ValueError(f"scorer {name!r} is not runnable in this build")
 
 
