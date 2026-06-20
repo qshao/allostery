@@ -370,6 +370,80 @@ plt.show()
 print(f"Saved: {FIGURES_DIR / 'network_graph_w5.png'}")\
 """),
 
+        # ── §5d Visualise — figure 4: residue–residue influence matrix ──────
+        md("### Residue–residue influence matrix"),
+
+        code("""\
+def build_influence_matrix(scores_csv: Path) -> tuple[np.ndarray, list[str]]:
+    \"\"\"Build an N×N symmetric influence matrix from a scores CSV.\"\"\"
+    with open(scores_csv) as f:
+        rows = list(csv.DictReader(f))
+    n = max(
+        max(int(r["residue_i_index"]) for r in rows),
+        max(int(r["residue_j_index"]) for r in rows),
+    ) + 1
+    matrix = np.zeros((n, n))
+    res_nums: dict[int, str] = {}
+    for r in rows:
+        i, j = int(r["residue_i_index"]), int(r["residue_j_index"])
+        s = float(r["score"])
+        matrix[i, j] = s
+        matrix[j, i] = s
+        res_nums[i] = r["residue_i_number"]
+        res_nums[j] = r["residue_j_number"]
+    labels = [res_nums[k] for k in range(n)]
+    return matrix, labels
+
+
+matrix_w5, res_labels = build_influence_matrix(scores_w5)
+n = len(res_labels)
+
+# KRAS4B structural regions (residue numbers, 1-indexed)
+REGIONS = {
+    "P-loop":     (10,  17, "#3498db"),
+    "Switch I":   (25,  40, "#e74c3c"),
+    "Switch II":  (57,  76, "#e67e22"),
+    "α3 helix":  (107, 126, "#9b59b6"),
+}
+# Convert residue numbers to 0-based matrix indices
+res_to_idx = {int(v): k for k, v in enumerate(res_labels)}
+
+fig, ax = plt.subplots(figsize=(9, 8))
+im = ax.imshow(matrix_w5, cmap="Reds", aspect="equal",
+               interpolation="nearest", vmin=0)
+plt.colorbar(im, ax=ax, label="Influence score", shrink=0.8)
+
+# Axis ticks every 20 residues
+tick_step = 20
+ticks = list(range(0, n, tick_step))
+ax.set_xticks(ticks)
+ax.set_yticks(ticks)
+ax.set_xticklabels([res_labels[t] for t in ticks], rotation=90, fontsize=8)
+ax.set_yticklabels([res_labels[t] for t in ticks], fontsize=8)
+ax.set_xlabel("Residue")
+ax.set_ylabel("Residue")
+
+# Annotate structural regions with coloured lines along both axes
+for name, (start, end, color) in REGIONS.items():
+    s_idx = res_to_idx.get(start, start - 1)
+    e_idx = res_to_idx.get(end,   end   - 1)
+    mid   = (s_idx + e_idx) / 2
+    for axis in ("x", "y"):
+        ax.axvline(s_idx - 0.5, color=color, linewidth=0.8, alpha=0.6) if axis == "x" else \
+        ax.axhline(s_idx - 0.5, color=color, linewidth=0.8, alpha=0.6)
+        ax.axvline(e_idx + 0.5, color=color, linewidth=0.8, alpha=0.6) if axis == "x" else \
+        ax.axhline(e_idx + 0.5, color=color, linewidth=0.8, alpha=0.6)
+    ax.text(mid, -4, name, ha="center", va="bottom", fontsize=6.5,
+            color=color, fontweight="bold", rotation=0)
+
+ax.set_title("Residue–residue influence matrix (window_size=5, 1 ns)", pad=20)
+fig.tight_layout()
+fig.savefig(FIGURES_DIR / "influence_matrix_w5.png", dpi=150)
+plt.show()
+print(f"Saved: {FIGURES_DIR / 'influence_matrix_w5.png'}")
+print(f"Matrix: {n}×{n}  |  score range: {matrix_w5.min():.4f} – {matrix_w5.max():.4f}")\
+"""),
+
         # ── §6 Multi-timescale comparison ────────────────────────────────────
         md("""\
 ---
