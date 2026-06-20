@@ -23,7 +23,7 @@ def build() -> None:
             "language": "python",
             "name": "python3",
         },
-        "language_info": {"name": "python", "version": "3.10.0"},
+        "language_info": {"name": "python", "version": "3.11.0"},
     }
     nb["cells"] = _cells()
     out = Path(__file__).parent / "demo.ipynb"
@@ -33,27 +33,96 @@ def build() -> None:
 
 def _cells() -> list[nbf.NotebookNode]:
     return [
-        # ── §1 Introduction ──────────────────────────────────────────────────
+        # ── §0 Setup ─────────────────────────────────────────────────────────
         md("""\
 # KRAS WT Allosteric Network Analysis
 ### A worked example using the `allostery` CLI
 
-This notebook demonstrates the complete allosteric network analysis pipeline \
-using a 1 µs molecular dynamics simulation of GDP-bound KRAS4B (wild type).
-
 ---
 
-## What is an allosteric network?
+## Setup: create a virtual environment (run once in your terminal)
 
-Allostery describes how a signal at one site in a protein influences a distant \
-site. In KRAS, GDP/GTP binding at the nucleotide pocket modulates effector \
-binding 15–20 Å away. The **allosteric network** is the set of residue-pair \
-couplings that transmit this signal.
+Before opening this notebook, create and activate a Python 3.11+ virtual \
+environment and install the required packages:
 
-The `allostery` influence model learns these couplings from MD trajectories by \
-predicting each residue's acceleration as a weighted sum of messages from all \
-other residues. Pairs whose motions systematically predict each other's \
-accelerations receive high influence scores.
+```bash
+# 1. Clone the repository
+git clone https://github.com/qshao/allostery.git
+cd allostery
+
+# 2. Create and activate a virtual environment
+python3.11 -m venv allostery-env
+source allostery-env/bin/activate          # Linux / macOS
+# allostery-env\\Scripts\\activate.bat     # Windows — use this line instead
+
+# 3. Install the allostery package (development mode)
+pip install -e .
+
+# 4. Install notebook and visualisation dependencies
+pip install matplotlib networkx jupyter mdtraj nbformat
+
+# 5. Launch Jupyter from the repo root (important — all paths are relative to here)
+jupyter notebook examples/kras_wt/demo.ipynb
+```
+
+> **GPU note:** PyTorch is installed as a CPU-only build by default. For GPU \
+training add `--index-url https://download.pytorch.org/whl/cu121` \
+(adjust for your CUDA version) before the `pip install -e .` step, or \
+set `device: cpu` in your config if no GPU is available.
+
+> **Trajectory files:** The 1 µs KRAS WT trajectory is not included in the \
+repository (it is 2.1 GB). Pre-computed influence scores **are** included, \
+so you can run all analysis and visualisation steps without the raw trajectory.\
+"""),
+
+        # ── §1 Introduction ──────────────────────────────────────────────────
+        md("""\
+---
+
+## Introduction
+
+### What is the `allostery` influence model?
+
+The `allostery` package implements a **data-driven approach to identifying \
+allosteric networks in proteins directly from molecular dynamics (MD) \
+trajectories**, without requiring prior knowledge of the allosteric mechanism \
+or hand-curated residue contacts.
+
+#### The problem with traditional approaches
+
+Classical allostery analysis (mutual information, linear correlation, \
+dynamic network analysis) measures how much two residues move together. \
+These methods are inherently **symmetric**: if residue A is correlated \
+with residue B, B is equally correlated with A. They cannot distinguish \
+which residue drives the other, and they conflate direct coupling with \
+indirect correlation through a shared third party.
+
+#### What the influence model learns
+
+The influence model frames allostery as a **causal prediction problem**:
+
+> *Can I predict residue i's acceleration at time t+1 from the current \
+positions and velocities of all other residues?*
+
+For each residue i, an attention-based message-passing network aggregates \
+weighted messages from every other residue j and predicts i's acceleration. \
+The **learned attention weight from j to i** is the raw influence score \
+— it measures how much knowing j's current state helps predict i's future \
+motion.
+
+After training on sliding windows of the MD trajectory, the model scores \
+all N×(N−1)/2 residue pairs. High-scoring pairs are edges in the \
+**allosteric network**; residues that lie on many short paths through this \
+network (high betweenness centrality) are **allosteric hubs**.
+
+#### Key properties
+
+| Property | Detail |
+|----------|--------|
+| **Asymmetric by design** | Influence of j→i ≠ influence of i→j; scores are then symmetrised |
+| **Time-translation invariant** | Uses relative positions + finite differences, not absolute coordinates; any window of the trajectory contributes equally |
+| **Timescale-tunable** | `window_size` sets the temporal scale: small windows capture fast local fluctuations, large windows capture slow collective motions |
+| **No contact threshold** | Scores all pairs regardless of distance; the allosteric network emerges from the data |
 
 ---
 
@@ -70,11 +139,12 @@ accelerations receive high influence scores.
 
 ## What this notebook demonstrates
 
-1. How to configure and validate your trajectory input
-2. How to train the influence model and score residue pairs
-3. How to analyse the resulting allosteric network
-4. How different time-window sizes reveal different layers of the mechanism
-5. How to visualise hub residues, score distributions, and the network graph\
+1. How to install the package and configure your environment
+2. How to configure and validate your trajectory input
+3. How to train the influence model and score all residue pairs
+4. How to analyse the resulting allosteric network (hub residues, pathways)
+5. How different time-window sizes reveal different mechanistic layers
+6. How to visualise hub residues, score distributions, and the network graph\
 """),
 
         # ── §2 Configuration ─────────────────────────────────────────────────
