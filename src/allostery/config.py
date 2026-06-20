@@ -30,6 +30,13 @@ _TRAINING_KEYS: frozenset[str] = frozenset({
 })
 _SCORING_KEYS: frozenset[str] = frozenset({'top_k'})
 _OUTPUT_KEYS: frozenset[str] = frozenset({'model_path', 'score_csv_path'})
+_ANALYZE_KEYS: frozenset[str] = frozenset({
+    'top_k', 'source', 'sink', 'top_paths', 'top_hubs', 'out_path',
+})
+_INTERPRET_KEYS: frozenset[str] = frozenset({
+    'llm', 'llm_model', 'llm_base_url', 'pdb_path',
+    'top_k', 'top_paths', 'top_hubs', 'out_json', 'out_md',
+})
 
 
 @dataclass(frozen=True, slots=True)
@@ -84,6 +91,29 @@ class ScoringConfig:
 
 
 @dataclass(frozen=True, slots=True)
+class AnalyzeConfig:
+    top_k: int = 20
+    source: str | None = None
+    sink: str | None = None
+    top_paths: int = 5
+    top_hubs: int = 10
+    out_path: Path | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class InterpretConfig:
+    llm: str = 'none'
+    llm_model: str | None = None
+    llm_base_url: str | None = None
+    pdb_path: Path | None = None
+    top_k: int = 20
+    top_paths: int = 5
+    top_hubs: int = 10
+    out_json: Path | None = None
+    out_md: Path | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class OutputConfig:
     model_path: Path | None
     score_csv_path: Path | None
@@ -97,6 +127,8 @@ class AppConfig:
     training: TrainingConfig | None
     scoring: ScoringConfig | None
     output: OutputConfig
+    analyze: AnalyzeConfig | None = None
+    interpret: InterpretConfig | None = None
 
 
 def load_config(path: str | Path) -> AppConfig:
@@ -116,6 +148,8 @@ def load_config(path: str | Path) -> AppConfig:
     output_raw = _require_mapping(raw, 'output')
     training_raw = _require_optional_mapping(raw, 'training')
     scoring_raw = _require_optional_mapping(raw, 'scoring')
+    analyze_raw = _require_optional_mapping(raw, 'analyze')
+    interpret_raw = _require_optional_mapping(raw, 'interpret')
 
     _warn_unknown_keys(data_raw, _DATA_KEYS, 'data', config_filename)
     _warn_unknown_keys(model_raw, _MODEL_KEYS, 'model', config_filename)
@@ -124,6 +158,10 @@ def load_config(path: str | Path) -> AppConfig:
     if scoring_raw is not None:
         _warn_unknown_keys(scoring_raw, _SCORING_KEYS, 'scoring', config_filename)
     _warn_unknown_keys(output_raw, _OUTPUT_KEYS, 'output', config_filename)
+    if analyze_raw is not None:
+        _warn_unknown_keys(analyze_raw, _ANALYZE_KEYS, 'analyze', config_filename)
+    if interpret_raw is not None:
+        _warn_unknown_keys(interpret_raw, _INTERPRET_KEYS, 'interpret', config_filename)
 
     training = None
     if mode in {'train', 'run'}:
@@ -155,6 +193,31 @@ def load_config(path: str | Path) -> AppConfig:
     if mode in {'score', 'run'}:
         scoring_raw = _require_mode_mapping(scoring_raw, 'scoring', mode)
         scoring = ScoringConfig(top_k=int(_require_value(scoring_raw, 'top_k')))
+
+    analyze_cfg = None
+    if analyze_raw is not None:
+        analyze_cfg = AnalyzeConfig(
+            top_k=int(analyze_raw.get('top_k', 20)),
+            source=(str(analyze_raw['source']) if analyze_raw.get('source') else None),
+            sink=(str(analyze_raw['sink']) if analyze_raw.get('sink') else None),
+            top_paths=int(analyze_raw.get('top_paths', 5)),
+            top_hubs=int(analyze_raw.get('top_hubs', 10)),
+            out_path=_optional_path(base_dir, analyze_raw.get('out_path')),
+        )
+
+    interpret_cfg = None
+    if interpret_raw is not None:
+        interpret_cfg = InterpretConfig(
+            llm=str(interpret_raw.get('llm', 'none')),
+            llm_model=(str(interpret_raw['llm_model']) if interpret_raw.get('llm_model') else None),
+            llm_base_url=(str(interpret_raw['llm_base_url']) if interpret_raw.get('llm_base_url') else None),
+            pdb_path=_optional_path(base_dir, interpret_raw.get('pdb_path')),
+            top_k=int(interpret_raw.get('top_k', 20)),
+            top_paths=int(interpret_raw.get('top_paths', 5)),
+            top_hubs=int(interpret_raw.get('top_hubs', 10)),
+            out_json=_optional_path(base_dir, interpret_raw.get('out_json')),
+            out_md=_optional_path(base_dir, interpret_raw.get('out_md')),
+        )
 
     config = AppConfig(
         mode=mode,
@@ -189,6 +252,8 @@ def load_config(path: str | Path) -> AppConfig:
             model_path=_optional_path(base_dir, output_raw.get('model_path')),
             score_csv_path=_optional_path(base_dir, output_raw.get('score_csv_path')),
         ),
+        analyze=analyze_cfg,
+        interpret=interpret_cfg,
     )
     validate_config(config, config_filename)
     return config
@@ -380,6 +445,29 @@ def validate_config(config: AppConfig, config_file: str = "") -> None:
     if config.mode in {'score', 'run'} and config.output.score_csv_path is None:
         errors.append("output.score_csv_path is required")
 
+    if config.analyze is not None:
+        a = config.analyze
+        if a.top_k <= 0:
+            errors.append(f"analyze.top_k must be > 0 (got {a.top_k})")
+        if a.top_paths <= 0:
+            errors.append(f"analyze.top_paths must be > 0 (got {a.top_paths})")
+        if a.top_hubs <= 0:
+            errors.append(f"analyze.top_hubs must be > 0 (got {a.top_hubs})")
+        if (a.source is None) != (a.sink is None):
+            errors.append("analyze.source and analyze.sink must be provided together")
+    if config.interpret is not None:
+        it = config.interpret
+        if it.llm not in {'none', 'ollama', 'anthropic', 'openai'}:
+            errors.append(
+                f"interpret.llm must be one of none, ollama, anthropic, openai (got {it.llm!r})"
+            )
+        if it.top_k <= 0:
+            errors.append(f"interpret.top_k must be > 0 (got {it.top_k})")
+        if it.top_paths <= 0:
+            errors.append(f"interpret.top_paths must be > 0 (got {it.top_paths})")
+        if it.top_hubs <= 0:
+            errors.append(f"interpret.top_hubs must be > 0 (got {it.top_hubs})")
+
     if errors:
         joined = "\n  ".join(errors)
         prefix = f"{config_file}:\n  " if config_file else ""
@@ -387,9 +475,11 @@ def validate_config(config: AppConfig, config_file: str = "") -> None:
 
 
 __all__ = [
+    'AnalyzeConfig',
     'AppConfig',
     'ConfigError',
     'DataConfig',
+    'InterpretConfig',
     'ModelConfig',
     'Mode',
     'OutputConfig',
