@@ -11,9 +11,10 @@ from allostery.config import AppConfig, load_config
 from allostery.pipeline.analyze import run_network_analysis
 from allostery.pipeline.execute import run_scoring, run_training
 from allostery.pipeline.interpret import run_interpretation
+from allostery.pipeline.workflow import run_workflow
 
 
-_SUBCOMMANDS = frozenset({'run', 'analyze', 'check', 'interpret'})
+_SUBCOMMANDS = frozenset({'run', 'analyze', 'check', 'interpret', 'workflow'})
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -65,6 +66,10 @@ def build_parser() -> argparse.ArgumentParser:
     interpret_parser.add_argument('--llm-model', default=None, help='Model name for the chosen backend')
     interpret_parser.add_argument('--llm-base-url', default=None, help='Base URL (Ollama; default http://localhost:11434)')
 
+    workflow_parser = subparsers.add_parser(
+        'workflow', help='Run train/score then analyze+interpret end to end from one config')
+    workflow_parser.add_argument('config_path', help='Path to YAML config file')
+
     return parser
 
 
@@ -106,6 +111,13 @@ def _emit(result: Result, args: argparse.Namespace) -> None:
 
 
 def _dispatch(args: argparse.Namespace) -> Result:
+    if args.command == 'workflow':
+        import sys as _sys
+        config = load_config(args.config_path)
+        emit_progress = not args.json and not args.quiet
+        progress = (lambda stage: print(f'[{stage}] ...', file=_sys.stderr)) if emit_progress else None
+        return run_workflow(config, progress=progress)
+
     if args.command == 'check':
         config = load_config(args.config_path)
         return Result(
