@@ -75,16 +75,60 @@ pytest -q
 
 ## Commands
 
-The CLI has three commands:
+The CLI has five commands and three global output flags:
 
 ```
 allostery run <config.yaml>              # train / score / run pipeline from YAML config
 allostery check <config.yaml>            # validate config without running anything
 allostery analyze <scores.csv> [options] # post-process: network + channels
+allostery interpret <scores.csv> [opts]  # candidate allosteric networks + optional LLM interpretation
+allostery workflow <config.yaml>         # run -> analyze -> interpret end to end from one config
 allostery --version                      # print version and exit
+
+# Global flags (before the subcommand):
+#   --json    emit a single JSON object on stdout (for scripts)
+#   --quiet   print only artifact paths
+#   --debug   show full tracebacks instead of a clean error message
 
 # Legacy short form (no subcommand) still works:
 allostery my_config.yaml
+```
+
+Exit codes: `0` success, `1` user/input error, `2` usage error, `3` external/backend error.
+
+### Interpret
+
+Turn a scores CSV into candidate allosteric networks (communities, pathways, hubs,
+coupled-pair clusters) plus an optional biological interpretation:
+
+```bash
+# Deterministic report only (no LLM)
+allostery interpret outputs/scores.csv --pdb path/to/structure.pdb
+
+# With a local Ollama model
+allostery interpret outputs/scores.csv --llm ollama --llm-model qwen3
+
+# With a cloud API (key from the environment)
+ANTHROPIC_API_KEY=... allostery interpret outputs/scores.csv --llm anthropic
+```
+
+### Workflow
+
+Run the whole pipeline from one config file. Add optional `analyze:` and `interpret:`
+sections and `allostery workflow` runs train -> score -> analyze -> interpret:
+
+```yaml
+mode: run
+# ... data / model / training / scoring / output as usual ...
+analyze:
+  top_k: 20
+interpret:
+  llm: none          # none | ollama | anthropic | openai
+  top_hubs: 10
+```
+
+```bash
+allostery workflow config.yaml
 ```
 
 ### Pipeline (run)
