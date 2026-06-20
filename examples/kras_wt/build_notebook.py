@@ -159,7 +159,8 @@ assert scores_w5.exists(), (
     f"Scores not found: {scores_w5}\\n"
     "Run training first or check your output.score_csv_path in the config."
 )
-n_pairs = sum(1 for _ in open(scores_w5)) - 1  # subtract header
+with open(scores_w5) as f:
+    n_pairs = sum(1 for _ in f) - 1
 print(f"Scores ready : {scores_w5}")
 print(f"Pairs scored : {n_pairs:,}")\
 """),
@@ -256,7 +257,7 @@ print(f"Saved: {FIGURES_DIR / 'score_distribution_w5.png'}")\
         code("""\
 import networkx as nx
 
-rows = read_scores_csv(str(scores_w5))
+rows = sorted(read_scores_csv(str(scores_w5)), key=lambda r: float(r["score"]), reverse=True)
 G = nx.Graph()
 for r in rows[:30]:
     i_label = f"{r['residue_i_chain']}:{r['residue_i_number']} {r['residue_i_name']}"
