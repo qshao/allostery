@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import random
 from dataclasses import dataclass
-from typing import Sequence, TypeVar
+from typing import Iterator, Sequence, TypeVar
 
 import numpy as np
 import torch
@@ -55,10 +55,11 @@ def seed_everything(seed: int, deterministic: bool = False) -> None:
         torch.backends.cudnn.benchmark = False
 
 
-def iter_batches(items: Sequence[T], batch_size: int) -> list[list[T]]:
+def iter_batches(items: Sequence[T], batch_size: int) -> Iterator[list[T]]:
     if batch_size <= 0:
         raise ValueError('batch_size must be greater than zero')
-    return [list(items[start : start + batch_size]) for start in range(0, len(items), batch_size)]
+    for start in range(0, len(items), batch_size):
+        yield list(items[start : start + batch_size])
 
 
 def split_samples(
@@ -110,15 +111,17 @@ def stack_relational_batch(samples: Sequence[TrainingSample], device: torch.devi
 def stack_influence_batch(samples: Sequence[InfluenceSample], device: torch.device) -> BatchedInfluenceSample:
     if not samples:
         raise ValueError('samples must not be empty')
+    # Stack numpy arrays first (single contiguous allocation), then transfer.
+    # For CUDA, pin the CPU tensor so the DMA transfer can run non-blocking.
+    pinned = device.type == 'cuda'
+    state_t = torch.as_tensor(np.stack([s.state_features for s in samples], axis=0), dtype=torch.float32)
+    accel_t = torch.as_tensor(np.stack([s.acceleration_targets for s in samples], axis=0), dtype=torch.float32)
+    if pinned:
+        state_t = state_t.pin_memory()
+        accel_t = accel_t.pin_memory()
     return BatchedInfluenceSample(
-        state_features=torch.stack(
-            [torch.as_tensor(s.state_features, dtype=torch.float32, device=device) for s in samples],
-            dim=0,
-        ),
-        acceleration_targets=torch.stack(
-            [torch.as_tensor(s.acceleration_targets, dtype=torch.float32, device=device) for s in samples],
-            dim=0,
-        ),
+        state_features=state_t.to(device, non_blocking=pinned),
+        acceleration_targets=accel_t.to(device, non_blocking=pinned),
     )
 
 
