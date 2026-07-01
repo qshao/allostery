@@ -24,14 +24,12 @@ def influence_loss(
 ) -> InfluenceLossBreakdown:
     """
     reconstruction: MSE between predicted and target accelerations.
-    sparsity: row entropy of the influence matrix — minimizing it encourages
-              each residue to be influenced by few others (sparse network).
+    sparsity: L1 mean of the influence matrix — penalises large values globally,
+              encouraging a sparse network without the row-competition artefact
+              of entropy regularisation (which conflicted with multi-pathway allostery).
     """
     reconstruction = F.mse_loss(prediction['acceleration'], target_acceleration)
-    influence_matrix = prediction['influence_matrix'].clamp_min(1e-8)
-    # H(row j) = -sum_i A[j,i] * log(A[j,i]); minimize to encourage peaked rows
-    per_row_entropy = -torch.sum(influence_matrix * torch.log(influence_matrix), dim=-1)
-    sparsity = sparsity_weight * per_row_entropy.mean()
+    sparsity = sparsity_weight * prediction['influence_matrix'].mean()
     return InfluenceLossBreakdown(reconstruction=reconstruction, sparsity=sparsity)
 
 

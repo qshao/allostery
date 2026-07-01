@@ -17,11 +17,11 @@ class ConfigError(ValueError):
 _DATA_KEYS: frozenset[str] = frozenset({
     'pdb_path', 'window_size', 'horizon_size', 'stride', 'time_step',
     'distance_cutoff', 'max_neighbors', 'min_sequence_separation', 'preprocess', 'topology_path',
-    'normalize',
+    'normalize', 'window_sizes',
 })
 _MODEL_KEYS: frozenset[str] = frozenset({
     'family', 'hidden_dim', 'residue_layers', 'pair_layers', 'dropout', 'edge_types',
-    'residue_chunk_size',
+    'residue_chunk_size', 'num_heads',
 })
 _TRAINING_KEYS: frozenset[str] = frozenset({
     'epochs', 'learning_rate', 'consistency_weight', 'entropy_weight', 'no_edge_weight',
@@ -52,6 +52,7 @@ class DataConfig:
     preprocess: str = 'none'
     topology_path: Path | None = None
     normalize: bool = True
+    window_sizes: list[int] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -63,6 +64,7 @@ class ModelConfig:
     family: str = 'relational'
     edge_types: int | None = None
     residue_chunk_size: int | None = None
+    num_heads: int = 4
 
 
 @dataclass(frozen=True, slots=True)
@@ -233,6 +235,10 @@ def load_config(path: str | Path) -> AppConfig:
             preprocess=str(data_raw.get('preprocess', 'none')),
             topology_path=_optional_path(base_dir, data_raw.get('topology_path')),
             normalize=bool(data_raw.get('normalize', True)),
+            window_sizes=(
+                [int(w) for w in data_raw['window_sizes']]
+                if data_raw.get('window_sizes') is not None else None
+            ),
         ),
         model=ModelConfig(
             hidden_dim=int(_require_value(model_raw, 'hidden_dim')),
@@ -245,6 +251,7 @@ def load_config(path: str | Path) -> AppConfig:
                 int(model_raw['residue_chunk_size'])
                 if model_raw.get('residue_chunk_size') is not None else None
             ),
+            num_heads=int(model_raw.get('num_heads', 4)),
         ),
         training=training,
         scoring=scoring,
@@ -367,6 +374,17 @@ def validate_config(config: AppConfig, config_file: str = "") -> None:
         errors.append(
             f"model.residue_chunk_size must be > 0 (got {config.model.residue_chunk_size})"
         )
+    if config.model.num_heads <= 0:
+        errors.append(f"model.num_heads must be > 0 (got {config.model.num_heads})")
+    if config.model.hidden_dim % config.model.num_heads != 0:
+        errors.append(
+            f"model.hidden_dim ({config.model.hidden_dim}) must be divisible by "
+            f"model.num_heads ({config.model.num_heads})"
+        )
+    if config.data.window_sizes is not None:
+        for ws in config.data.window_sizes:
+            if ws <= 0:
+                errors.append(f"data.window_sizes entries must be > 0 (got {ws})")
     if config.model.family not in {'relational', 'cri', 'influence'}:
         errors.append(
             f"model.family must be one of relational, cri, or influence (got {config.model.family!r})"

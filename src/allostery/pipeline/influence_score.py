@@ -5,6 +5,7 @@ from typing import TypedDict
 
 import torch
 
+from allostery.features.amino_acid import aa_name_to_idx
 from allostery.influence.data import build_influence_samples
 from allostery.io.pdb import ResidueRecord
 from allostery.io.trajectory import load_trajectory
@@ -43,34 +44,54 @@ def score_influence_trajectory(
     batch_size: int = 8,
     device: str = 'cpu',
     min_sequence_separation: int = 1,
+    window_sizes: list[int] | None = None,
 ) -> list[InfluencePairScore]:
+    """Score a trajectory with the influence model.
+
+    window_sizes: if provided, averages influence matrices across all listed
+                  window sizes (multi-scale scoring).
+    """
     trajectory = load_trajectory(Path(pdb_path), topology_path=topology_path)
-    samples = build_influence_samples(
-        trajectory.coordinates,
-        window_size=window_size,
-        stride=stride,
-        time_step=time_step,
-        preprocess=preprocess,
-        normalize=normalize,
+
+    # Residue identity indices — matches training-time injection.
+    residue_type_indices = torch.tensor(
+        [aa_name_to_idx(r.name) for r in trajectory.residues],
+        dtype=torch.long,
     )
-    if not samples:
-        raise ValueError('trajectory did not yield any influence scoring windows')
+
+    effective_window_sizes = window_sizes if window_sizes else [window_size]
 
     torch_device = resolve_device(device)
     num_residues = trajectory.coordinates.shape[1]
     accumulated = torch.zeros(num_residues, num_residues, device=torch_device)
-    count = 0
+    total_count = 0
 
+    rti = residue_type_indices.to(torch_device)
     model = model.to(torch_device)
     model.eval()
-    with torch.no_grad():
-        for batch_samples in iter_batches(samples, batch_size):
-            batch = stack_influence_batch(batch_samples, torch_device)
-            output = model(batch.state_features)
-            accumulated += output['influence_matrix'].sum(dim=0)
-            count += len(batch_samples)
 
-    mean_influence = (accumulated / max(count, 1)).cpu()  # [N, N]
+    for ws in effective_window_sizes:
+        samples = build_influence_samples(
+            trajectory.coordinates,
+            window_size=ws,
+            stride=stride,
+            time_step=time_step,
+            preprocess=preprocess,
+            normalize=normalize,
+        )
+        if not samples:
+            continue
+        with torch.no_grad():
+            for batch_samples in iter_batches(samples, batch_size):
+                batch = stack_influence_batch(batch_samples, torch_device)
+                output = model(batch.state_features, residue_type_indices=rti)
+                accumulated += output['influence_matrix'].sum(dim=0)
+                total_count += len(batch_samples)
+
+    if total_count == 0:
+        raise ValueError('trajectory did not yield any influence scoring windows')
+
+    mean_influence = (accumulated / total_count).cpu()  # [N, N]
 
     sep = max(min_sequence_separation, model.min_sequence_separation)
     rows, cols = torch.triu_indices(num_residues, num_residues, offset=sep)
@@ -85,7 +106,7 @@ def score_influence_trajectory(
             'score': float(pair_score[k].item()),
             'influence_i_on_j': float(i_on_j[k].item()),
             'influence_j_on_i': float(j_on_i[k].item()),
-            'support_count': count,
+            'support_count': total_count,
         }
         for k, (i, j) in enumerate(zip(rows.tolist(), cols.tolist()))
     ]

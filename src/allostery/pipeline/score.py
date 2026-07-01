@@ -67,6 +67,7 @@ def build_scoring_model(checkpoint: ModelCheckpoint) -> nn.Module:
             dropout=checkpoint.dropout,
             min_sequence_separation=checkpoint.min_sequence_separation,
             residue_chunk_size=residue_chunk_size,
+            num_heads=checkpoint.num_heads,
         )
     else:
         model = RelationalScoreModel(

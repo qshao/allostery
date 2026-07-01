@@ -16,14 +16,16 @@ def test_influence_model_output_shapes() -> None:
     assert output['influence_matrix'].shape == (2, 4, 4)
 
 
-def test_influence_matrix_rows_sum_to_one() -> None:
+def test_influence_matrix_values_in_unit_interval() -> None:
     model = AllostericInfluenceModel(state_dim=6, hidden_dim=8)
     state_features = torch.randn(1, 3, 5, 6)
 
     output = model(state_features)
     influence = output['influence_matrix']  # [1, 5, 5]
 
-    torch.testing.assert_close(influence.sum(dim=-1), torch.ones(1, 5))
+    # Sigmoid attention → independent per-pair scores in [0, 1]; no row-sum constraint.
+    assert (influence >= 0.0).all(), 'influence values must be non-negative'
+    assert (influence <= 1.0).all(), 'influence values must be at most 1.0'
 
 
 def test_influence_matrix_diagonal_is_zero() -> None:
@@ -51,10 +53,10 @@ def test_influence_model_single_residue_pair() -> None:
     output = model(state_features)
 
     assert output['acceleration'].shape == (1, 3, 2, 3)
-    # With 2 residues and diagonal masked, each residue influences the other with weight 1.0
+    # With 2 residues and diagonal masked, off-diagonal values are sigmoid scores in (0, 1).
     influence = output['influence_matrix'].squeeze(0)  # [2, 2]
-    torch.testing.assert_close(influence[0, 1], torch.tensor(1.0))
-    torch.testing.assert_close(influence[1, 0], torch.tensor(1.0))
+    assert 0.0 <= influence[0, 1].item() <= 1.0
+    assert 0.0 <= influence[1, 0].item() <= 1.0
 
 
 def test_influence_model_rejects_nonpositive_encoder_layers() -> None:
@@ -107,7 +109,7 @@ def test_influence_model_masks_pairs_within_sequence_separation() -> None:
                 )
 
 
-def test_influence_model_rows_still_sum_to_one_with_separation() -> None:
+def test_influence_model_valid_values_with_separation() -> None:
     model = AllostericInfluenceModel(
         state_dim=6, hidden_dim=8, num_encoder_layers=1, min_sequence_separation=3
     )
@@ -116,7 +118,14 @@ def test_influence_model_rows_still_sum_to_one_with_separation() -> None:
     output = model(state_features)
     A = output['influence_matrix'].squeeze(0)  # [8, 8]
 
-    torch.testing.assert_close(A.sum(dim=-1), torch.ones(8))
+    # Masked entries must be exactly 0 (sigmoid(-inf) = 0).
+    for i in range(8):
+        for j in range(8):
+            if abs(i - j) < 3:
+                assert A[i, j].item() == pytest.approx(0.0, abs=1e-6)
+    # Unmasked entries must be sigmoid scores in [0, 1].
+    assert (A >= 0.0).all()
+    assert (A <= 1.0).all()
 
 
 def test_influence_model_separation_one_is_diagonal_only() -> None:

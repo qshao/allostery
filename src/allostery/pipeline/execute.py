@@ -51,6 +51,8 @@ def run_training(config: AppConfig, *, progress_fn=None) -> Any:
             residue_chunk_size=config.model.residue_chunk_size,
             deterministic=training.deterministic,
             progress_fn=progress_fn,
+            num_heads=config.model.num_heads,
+            window_sizes=config.data.window_sizes,
         )
 
     if config.model.family == 'cri':
@@ -130,6 +132,7 @@ def run_scoring(config: AppConfig) -> int:
             batch_size=config.training.batch_size if config.training else 8,
             device=config.training.device if config.training else 'cpu',
             min_sequence_separation=config.data.min_sequence_separation,
+            window_sizes=config.data.window_sizes,
         )
     elif config.model.family == 'cri':
         scores = score_cri_trajectory(
