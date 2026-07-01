@@ -32,6 +32,19 @@ allostery analyze outputs/influence_example_scores.csv \
 
 `allostery examples/...` trains the influence model on the bundled 3-frame fixture and writes a ranked pair-score CSV to `outputs/`. `allostery analyze` then builds the allosteric network and lists hub residues and communication channels.
 
+## KRAS WT demo notebook
+
+`examples/kras_wt/demo.ipynb` is a full end-to-end walkthrough on a real system: **KRAS4B GDP-bound wild type**, 169 residues, 1 µs MD trajectory. It covers preprocessing, training at eight window sizes (0.6–15 ns), hub-centrality comparison, score distributions, allosteric network graphs, and 169×169 residue–residue influence matrices across all timescales.
+
+Open it with Jupyter:
+
+```bash
+pip install jupyter matplotlib networkx
+jupyter notebook examples/kras_wt/demo.ipynb
+```
+
+The notebook is generated from `examples/kras_wt/build_notebook.py`; run that script to regenerate `demo.ipynb` after any edits to the build script.
+
 ## Virtual Environment
 
 Create an isolated environment before installing dependencies or running training and inference:
