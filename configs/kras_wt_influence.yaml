@@ -4,26 +4,30 @@ data:
   pdb_path: /home/qshao/WT/WT-sol6.trr
   topology_path: /home/qshao/WT/WT-sol6.gro
   window_size: 5
+  window_sizes: [5, 10, 25]   # multi-scale: 1ns, 2ns, 5ns windows
   horizon_size: 1
   stride: 1
   time_step: 200.0        # ps per frame (dt=0.002 ps, nstxout=100000)
   preprocess: align       # remove rigid-body rotation/translation
+  min_sequence_separation: 3  # mask immediate sequence neighbours
 
 model:
   family: influence
   hidden_dim: 64
-  residue_layers: 2
+  residue_layers: 3
   pair_layers: 1
   dropout: 0.1
+  num_heads: 4
 
 training:
   epochs: 100
   learning_rate: 0.001
-  sparsity_weight: 0.01
+  sparsity_weight: 0.005
   consistency_weight: 0.0
   validation_fraction: 0.1
   patience: 20
   device: cuda
+  batch_size: 16
 
 scoring:
   top_k: 30

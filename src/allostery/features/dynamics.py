@@ -43,10 +43,23 @@ def build_residue_dynamics(
         raise ValueError("preprocess must be one of none, center, or align")
 
     positions = coordinates[1:-1]
-    if normalize:
-        positions = positions - positions.mean(axis=1, keepdims=True)
     velocities = (coordinates[2:] - coordinates[:-2]) / (2.0 * time_step)
     accelerations = (coordinates[2:] - (2.0 * coordinates[1:-1]) + coordinates[:-2]) / (time_step * time_step)
+    if normalize:
+        # Centre positions; normalize each physical quantity by its own window std
+        # so all three have O(1) magnitude. Velocities and accelerations are already
+        # translation-invariant (finite differences), so they need only scaling.
+        # Per-quantity normalization prevents the trivial zero-acceleration solution:
+        # without it, acceleration targets are ~10,000× smaller than position features,
+        # making MSE(predict-zero) ≈ 4e-7 — a trivially satisfied reconstruction loss
+        # that lets the model ignore the dynamics entirely.
+        positions = positions - positions.mean(axis=(0, 1), keepdims=True)
+        pos_scale = max(float(positions.std()), 1e-8)
+        positions = positions / pos_scale
+        vel_scale = max(float(velocities.std()), 1e-8)
+        velocities = velocities / vel_scale
+        accel_scale = max(float(accelerations.std()), 1e-8)
+        accelerations = accelerations / accel_scale
     return ResidueDynamics(
         positions=positions.astype(np.float32, copy=False),
         velocities=velocities.astype(np.float32, copy=False),
